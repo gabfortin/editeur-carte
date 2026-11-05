@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fr-CA">
+<head>
+<meta charset="UTF-8">
+<title>Tests · Éditeur de carte</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; }
+  .ok { color: #15803d; } .ko { color: #b91c1c; font-weight: 700; }
+  #summary { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
+  iframe { width: 900px; height: 500px; border: 1px solid #ccc; margin-top: 16px; }
+</style>
+</head>
+<body>
+<p>Lancer depuis la racine du projet : <code>python3 -m http.server 8001</code> puis ouvrir <code>/tests/tests.html</code>.</p>
+<div id="summary">Tests en cours…</div>
+<ol id="results"></ol>
+<iframe id="viewer" title="Carte exportée"></iframe>
+<meta name="app-version" content="test">
+<script src="../js/csv.js"></script>
+<script src="../js/sanitize.js"></script>
+<script src="../js/model.js"></script>
+<script>
+  // export-html.js charge ses morceaux en chemins relatifs à la racine : on le fait depuis /tests/
+  window.__base = '../';
+</script>
+<script src="../js/export-html.js"></script>
+<script>
+(async function () {
+  const results = document.getElementById('results');
+  let pass = 0, fail = 0;
+  function check(label, cond, detail) {
+    const li = document.createElement('li');
+    li.className = cond ? 'ok' : 'ko';
+    li.textContent = (cond ? '✓ ' : '✗ ') + label + (cond || detail === undefined ? '' : ' — ' + detail);
+    results.appendChild(li);
+    cond ? pass++ : fail++;
+  }
+
+  const text = await (await fetch('exemple-mapme.csv')).text();
+
+  // ── CSV ──
+  const parsed = CSV.parse(text);
+  check('8 lignes de données lues', parsed.records.length === 8, parsed.records.length);
+  check('12 colonnes', parsed.header.length === 12, parsed.header.length);
+  check('séparateur virgule détecté', parsed.delimiter === ',');
+  const d0 = parsed.records[0].description;
+  check('description multiligne conservée', d0.split('\n').length > 3);
+  check('guillemets doublés décodés', d0.includes('href="https://www.facebook.com/exemple"'));
+  check('champ vide = chaîne vide', parsed.records[1].name === '' && parsed.records[1].categories === 'Itinérance et lutte à la pauvreté');
+  check('aller-retour CSV identique octet pour octet', CSV.serialize(parsed.header, parsed.records, parsed) === text,
+    'différence au caractère ' + [...CSV.serialize(parsed.header, parsed.records, parsed)].findIndex((c, i) => c !== text[i]));
+  const semi = CSV.parse('a;b;c\r\n1;"x;y";3\r\n');
+  check('séparateur point-virgule et CRLF', semi.delimiter === ';' && semi.eol === '\r\n' && semi.records[0].b === 'x;y');
+  check('BOM ignoré', CSV.parse('﻿name,latitude\nA,1\n').header[0] === 'name');
+
+  // ── Modèle ──
+  const p = Model.projectFromCsv(parsed, 'exemple-mapme.csv');
+  check('rôles reconnus (Mapme)', p.roles.name === 'name' && p.roles.lat === 'latitude' && p.roles.lng === 'longitude' && p.roles.id === 'mapmeId' && p.roles.actionUrl === 'actionUrl');
+  check('toCsv sans modification = fichier d\'origine', Model.toCsv(p) === text);
+  const a = Model.analyse(p);
+  const issueOf = (id) => a.issues.get(p.features.find(f => f.row.mapmeId === id).uid);
+  check('ligne sans position repérée', issueOf('d6422fb2-d312-4786-aa84-726446951852') === 'sans-position');
+  check('ligne presque vide repérée', issueOf('1a664c6c-ac3d-43f7-9087-0eab9213b8ed') === 'sans-position');
+  check('lieu à Madrid repéré comme loin', issueOf('0dd6ab4d-3b50-4497-b6ff-74ddf5f13fc8') === 'loin');
+  check('lieu normal sans problème', issueOf('059151de-dbd1-4614-9fca-2e9c2fd7f989') === undefined);
+  check('catégories découpées', Model.getCategories(p, p.features[0]).length === 3);
+  check('couleurs attribuées à chaque catégorie', [...Model.categoryStats(p).keys()].every(c => /^#/.test(p.settings.categoryColors[c])));
+
+  const moved = p.features[3];
+  const before = JSON.stringify(p.features.filter(f => f !== moved).map(f => f.row));
+  Model.setLatLng(p, moved, [45.5, -73.6]);
+  check('déplacement : seule latitude/longitude du lieu changent', moved.row.latitude === '45.5' && moved.row.longitude === '-73.6' &&
+    JSON.stringify(p.features.filter(f => f !== moved).map(f => f.row)) === before && moved.row.address === '7330 Rue Coffee, Montréal, QC H4B 1K1, Canada');
+
+  const path = [[45.52, -73.58], [45.53, -73.57], [45.535, -73.565]];
+  const line = Model.newFeature(p, 'line', path);
+  p.features.push(line);
+  Model.set(p, line, 'name', 'Piste test');
+  check('ligne : colonne geometry ajoutée en fin', p.columns[p.columns.length - 1] === 'geometry' && p.features[0].row.geometry === '');
+  check('ligne : WKT relu identique', JSON.stringify(Model.getPath(p, line)) === JSON.stringify(path));
+  check('ligne : identifiant généré', /^[0-9a-f-]{36}$/.test(line.row.mapmeId));
+  const reparsed = Model.projectFromCsv(CSV.parse(Model.toCsv(p)), 'x.csv');
+  const relu = reparsed.features.find(f => f.row.name === 'Piste test');
+  check('ligne : survit à un aller-retour CSV', relu && Model.kind(reparsed, relu) === 'line' && Model.getPath(reparsed, relu).length === 3);
+  check('GeoJSON accepté dans geometry', Model.parseWkt('{"type":"LineString","coordinates":[[-73.5,45.5],[-73.6,45.6]]}')[1][0] === 45.6);
+
+  // ── Nettoyage HTML ──
+  const dirty = parsed.records[4].description;
+  const clean = Sanitize.html(dirty);
+  check('script retiré', !/script|alert\(1\)/.test(clean), clean);
+  check('image de tiers retirée', !/<img|pixel/.test(clean), clean);
+  check('lien javascript: neutralisé', !/javascript:/i.test(clean) && clean.includes('lien piégé'), clean);
+  check('<font> et styles retirés', !/<font|style=/.test(clean), clean);
+  check('adresse en clair transformée en lien', clean.includes('<a href="https://montreal.ca/articles/exemple"'), clean);
+  const c0 = Sanitize.html(d0);
+  check('liens gardés avec target et rel', /<a href="https:\/\/www\.facebook\.com\/exemple" target="_blank" rel="noopener noreferrer">/.test(c0), c0);
+  check('pas de <br> ni d\'espace en tête', !/^\s*<br/.test(c0) && c0.startsWith('<p>'), c0.slice(0, 40));
+  check('texte vers recherche', Sanitize.text('<p>Un&nbsp;<b>test</b></p>') === 'Un test');
+
+  // ── Export HTML ──
+  p.title = 'Carte test <\/script> <b>';
+  p.about = 'Texte « à propos ».';
+  const html = await ExportHtml.build(p);
+  check('page exportée autonome (Leaflet intégré)', html.includes('Leaflet') && !/<script[^>]+src=/.test(html));
+  check('titre échappé', html.includes('<title>Carte test &lt;/script&gt; &lt;b&gt;</title>'));
+  const back = ExportHtml.extractProject(html);
+  check('projet relu depuis la page exportée', back.features.length === p.features.length && back.title === p.title);
+  check('description intacte après export', back.features[0].row.description === d0);
+
+  // ── Carte exportée dans un iframe ──
+  const frame = document.getElementById('viewer');
+  frame.srcdoc = html;
+  await new Promise(r => frame.onload = r);
+  await new Promise(r => setTimeout(r, 400));
+  const doc = frame.contentDocument;
+  const items = doc.querySelectorAll('.item');
+  // 9 lieux dont 2 sans position → 7 affichés (6 points + 1 ligne)
+  check('carte exportée : 7 lieux listés', items.length === 7, items.length);
+  check('carte exportée : 7 tracés sur la carte', doc.querySelectorAll('.leaflet-interactive').length === 7, doc.querySelectorAll('.leaflet-interactive').length);
+  check('carte exportée : filtres de catégorie', doc.querySelectorAll('.chip').length === Model.categoryStats(p).size + 1);
+  doc.querySelector('.item').click();
+  await new Promise(r => setTimeout(r, 2500));
+  const pop = doc.querySelector('.leaflet-popup .pop');
+  check('carte exportée : fenêtre du lieu ouverte au clic', !!pop, 'aucune fenêtre');
+  check('carte exportée : aucune balise script dans la fenêtre', pop && !pop.querySelector('script'));
+
+  document.getElementById('summary').textContent = fail ? `${fail} échec(s), ${pass} réussi(s)` : `Tous les tests passent (${pass})`;
+  document.getElementById('summary').className = fail ? 'ko' : 'ok';
+  document.body.dataset.done = fail ? 'fail' : 'pass';
+})().catch(e => {
+  document.getElementById('summary').textContent = 'Erreur : ' + e.message;
+  document.getElementById('summary').className = 'ko';
+  document.body.dataset.done = 'error';
+  console.error(e);
+});
+</script>
+</body>
+</html>

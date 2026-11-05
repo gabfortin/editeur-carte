@@ -1,0 +1,8 @@
+.DS_Store
+CLAUDE.md
+node_modules/
+__pycache__/
+
+# Exports bruts et essais : jamais commités, tout le dépôt est publié par GitHub Pages.
+sources/*
+!sources/README.md

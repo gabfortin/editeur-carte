@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="fr-CA">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Éditeur de carte</title>
+  <meta name="description" content="Importer un fichier CSV de lieux, placer et modifier des points et des lignes, puis publier la carte en une page HTML à intégrer dans un autre site. Tout reste dans le navigateur.">
+  <meta name="author" content="Gabriel Fortin">
+  <link rel="author" href="https://gabfortin.com">
+  <meta name="app-version" content="2026-11-05-1">
+  <meta name="theme-color" content="#eef1ea" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0b1310" media="(prefers-color-scheme: dark)">
+  <link rel="icon" type="image/svg+xml" href="img/icon.svg">
+
+  <!-- Mesure d'audience anonyme, sans cookie (voir confidentialite.html) -->
+  <script>window.goatcounter = {path: function(p) { return location.host + p }}</script>
+  <script data-goatcounter="https://gabfortin.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+
+  <link rel="preconnect" href="https://tile.openstreetmap.org">
+  <link rel="preload" href="fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="vendor/leaflet-1.9.4/leaflet.css">
+  <link rel="stylesheet" href="css/style.css?v=2026-11-05-1">
+</head>
+<body>
+  <a class="skip-link" href="#map">Passer à la carte</a>
+  <a class="skip-link" href="#gfSidebar">Passer à la liste des lieux</a>
+
+  <div id="map" role="region" aria-label="Carte en cours de modification" tabindex="0"></div>
+
+  <header class="gf-header">
+    <div class="gf-brand">
+      <img src="img/icon.svg" class="gf-brand-mark" alt="" width="38" height="38">
+      <div class="gf-brand-text">
+        <h1 class="gf-brand-word">Éditeur <span>de carte</span></h1>
+        <p class="gf-brand-sub"><span id="project-name">Aucune carte</span><span id="save-status" aria-live="polite"></span></p>
+      </div>
+    </div>
+    <div class="gf-header-spacer"></div>
+    <div class="gf-actions">
+      <button class="gf-tool" type="button" id="btn-maps" aria-haspopup="dialog">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        <span>Mes cartes</span>
+      </button>
+      <button class="gf-tool" type="button" id="btn-import">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 15V3m0 0L7 8m5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+        <span>Importer</span>
+      </button>
+      <button class="gf-tool" type="button" id="btn-undo" disabled title="Annuler (Ctrl+Z)">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+        <span>Annuler</span>
+      </button>
+      <button class="gf-tool gf-tool-primary" type="button" id="btn-publish" aria-haspopup="dialog" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3v12m0 0 5-5m-5 5-5-5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+        <span>Exporter</span>
+      </button>
+    </div>
+    <button class="gf-info-btn" id="gfInfoBtn" type="button" aria-label="À propos de l'éditeur" aria-haspopup="dialog">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="7.6" r="1.4" fill="currentColor"/>
+        <path d="M12 11v6.2" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </header>
+
+  <input type="file" id="file-input" accept=".csv,.txt,.json,.html,.htm,text/csv,application/json,text/html" hidden>
+
+  <!-- Bandeau d'aide pendant un ajout ou un placement -->
+  <div class="mode-bar" id="mode-bar" role="status" hidden>
+    <span id="mode-text"></span>
+    <button type="button" class="gf-btn" id="mode-finish" hidden>Terminer la ligne</button>
+    <button type="button" class="gf-btn gf-btn-ghost" id="mode-cancel">Annuler</button>
+  </div>
+
+  <button class="gf-sidebar-toggle" id="gfSidebarToggle" type="button" aria-label="Panneau des lieux" aria-expanded="true" aria-controls="gfSidebar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+  </button>
+
+  <aside class="gf-sidebar" id="gfSidebar" aria-label="Lieux de la carte" tabindex="-1">
+
+    <!-- Accueil : aucune carte ouverte -->
+    <section class="panel" id="panel-welcome">
+      <div class="gf-sidebar-header"><h2>Commencer</h2></div>
+      <div class="welcome">
+        <p>Importez un fichier CSV de lieux, ou partez d'une carte vide et ajoutez des points et des lignes.</p>
+        <button type="button" class="gf-btn" data-action="import">Importer un fichier CSV</button>
+        <button type="button" class="gf-btn gf-btn-ghost" data-action="new">Créer une carte vide</button>
+        <details class="format-help">
+          <summary>Format du fichier</summary>
+          <p>Une ligne par lieu. Colonnes reconnues (export Mapme compatible) :</p>
+          <ul>
+            <li><code>name</code> : nom du lieu</li>
+            <li><code>latitude</code>, <code>longitude</code> : position</li>
+            <li><code>description</code> : texte, HTML simple accepté</li>
+            <li><code>categories</code> : séparées par <code>;</code></li>
+            <li><code>address</code>, <code>actionText</code>, <code>actionUrl</code></li>
+            <li><code>geometry</code> : une ligne (tracé) en WKT, ex. <code>LINESTRING (-73.58 45.52, -73.57 45.53)</code></li>
+          </ul>
+          <p>Les autres colonnes sont gardées telles quelles et ressortent à l'export CSV.</p>
+          <p>On peut aussi rouvrir une carte exportée en HTML ou un fichier de projet (.json).</p>
+        </details>
+      </div>
+    </section>
+
+    <!-- Liste des lieux -->
+    <section class="panel" id="panel-list" hidden>
+      <div class="gf-sidebar-header">
+        <h2 id="list-title">Lieux <span class="gf-count" id="list-count"></span></h2>
+      </div>
+      <div class="list-tools">
+        <div class="add-row">
+          <button type="button" class="gf-btn" id="btn-add-point">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+            Ajouter un point
+          </button>
+          <button type="button" class="gf-btn gf-btn-ghost" id="btn-add-line">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 18 10 8l5 6 5-9"/><circle cx="4" cy="18" r="1.6"/><circle cx="20" cy="5" r="1.6"/></svg>
+            Ajouter une ligne
+          </button>
+        </div>
+        <div class="search">
+          <label class="sr-only" for="search">Rechercher un lieu</label>
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="search" type="search" placeholder="Rechercher" autocomplete="off">
+        </div>
+        <div class="chips" id="filters" role="group" aria-label="Filtrer les lieux"></div>
+        <button type="button" class="link-btn" id="btn-settings">Réglages de la carte : titre, texte, couleurs</button>
+      </div>
+      <p class="sr-only" id="list-status" aria-live="polite"></p>
+      <ul class="feature-list" id="feature-list" aria-labelledby="list-title"></ul>
+    </section>
+
+    <!-- Fiche d'un lieu -->
+    <section class="panel" id="panel-edit" hidden>
+      <div class="edit-head">
+        <button type="button" class="link-btn back-btn" id="btn-back">← Tous les lieux</button>
+      </div>
+      <form class="edit-form" id="edit-form" autocomplete="off" novalidate>
+        <p class="kind-badge" id="edit-kind"></p>
+        <div class="issue-note" id="edit-issue" hidden></div>
+
+        <label class="field">
+          <span>Nom</span>
+          <input type="text" id="f-name" data-role="name">
+        </label>
+
+        <div class="field">
+          <span id="cats-label">Catégories</span>
+          <div class="cat-input" id="cat-input">
+            <ul class="cat-chips" id="cat-chips" aria-labelledby="cats-label"></ul>
+            <input type="text" id="f-cat" list="cat-options" placeholder="Ajouter une catégorie" aria-labelledby="cats-label" aria-describedby="cat-help">
+            <datalist id="cat-options"></datalist>
+          </div>
+          <small id="cat-help">Entrée pour ajouter. Une catégorie existante garde sa couleur.</small>
+        </div>
+
+        <label class="field">
+          <span>Adresse</span>
+          <input type="text" id="f-address" data-role="address">
+        </label>
+
+        <div class="field">
+          <span id="desc-label">Description</span>
+          <div class="rte">
+            <div class="rte-bar" role="toolbar" aria-label="Mise en forme">
+              <button type="button" data-cmd="bold" aria-label="Gras" title="Gras"><b>G</b></button>
+              <button type="button" data-cmd="italic" aria-label="Italique" title="Italique"><i>I</i></button>
+              <button type="button" data-cmd="insertUnorderedList" aria-label="Liste à puces" title="Liste à puces">•≡</button>
+              <button type="button" data-cmd="createLink" aria-label="Ajouter un lien" title="Lien">🔗</button>
+              <button type="button" data-cmd="removeFormat" aria-label="Retirer la mise en forme" title="Retirer la mise en forme">⌫</button>
+              <button type="button" class="rte-source" id="rte-source" aria-pressed="false" title="Voir le code HTML d'origine">HTML</button>
+            </div>
+            <div class="rte-area" id="f-desc" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="desc-label"></div>
+            <textarea class="rte-code" id="f-desc-code" aria-labelledby="desc-label" spellcheck="false" hidden></textarea>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <label class="field">
+            <span>Texte du lien</span>
+            <input type="text" id="f-actionText" data-role="actionText" placeholder="En savoir plus">
+          </label>
+          <label class="field">
+            <span>Adresse du lien</span>
+            <input type="url" id="f-actionUrl" data-role="actionUrl" placeholder="https://">
+          </label>
+        </div>
+
+        <div class="field position" id="position-field">
+          <span>Position</span>
+          <p class="position-text" id="position-text"></p>
+          <div class="position-actions">
+            <button type="button" class="gf-btn gf-btn-ghost small" id="btn-place">Placer sur la carte</button>
+            <button type="button" class="gf-btn gf-btn-ghost small" id="btn-zoom">Centrer la carte</button>
+            <button type="button" class="gf-btn gf-btn-ghost small" id="btn-extend" hidden>Prolonger la ligne</button>
+          </div>
+        </div>
+
+        <details class="other-fields" id="other-fields">
+          <summary>Autres colonnes du fichier</summary>
+          <div id="other-fields-list"></div>
+        </details>
+
+        <div class="danger-row">
+          <button type="button" class="gf-btn gf-btn-danger" id="btn-delete">Supprimer ce lieu</button>
+        </div>
+      </form>
+    </section>
+  </aside>
+  <div class="gf-sidebar-scrim" id="gfSidebarScrim"></div>
+
+  <!-- Mes cartes -->
+  <dialog class="gf-dialog" id="dlg-maps" aria-labelledby="dlg-maps-title">
+    <form method="dialog" class="dlg-close-form"><button class="gf-info-close" aria-label="Fermer">✕</button></form>
+    <h2 id="dlg-maps-title">Mes cartes</h2>
+    <p class="dlg-note">Les cartes sont enregistrées automatiquement dans ce navigateur, sur cet appareil seulement. Pour les garder ailleurs, téléchargez le fichier de projet (Exporter).</p>
+    <div class="dlg-actions">
+      <button type="button" class="gf-btn" data-action="new">Nouvelle carte vide</button>
+      <button type="button" class="gf-btn gf-btn-ghost" data-action="import">Ouvrir un fichier</button>
+    </div>
+    <ul class="maps-list" id="maps-list"></ul>
+  </dialog>
+
+  <!-- Réglages de la carte -->
+  <dialog class="gf-dialog" id="dlg-settings" aria-labelledby="dlg-settings-title">
+    <form method="dialog" class="dlg-close-form"><button class="gf-info-close" aria-label="Fermer">✕</button></form>
+    <h2 id="dlg-settings-title">Réglages de la carte</h2>
+    <label class="field">
+      <span>Titre</span>
+      <input type="text" id="s-title">
+    </label>
+    <label class="field">
+      <span>Texte « À propos » de la carte publiée</span>
+      <textarea id="s-about" rows="4" placeholder="Ce que montre la carte, d'où viennent les données, qui l'a réalisée."></textarea>
+    </label>
+    <div class="field-row">
+      <label class="field color-field">
+        <span>Couleur principale</span>
+        <input type="color" id="s-accent">
+      </label>
+      <label class="check">
+        <input type="checkbox" id="s-bycat">
+        <span>Colorer les lieux selon leur première catégorie</span>
+      </label>
+    </div>
+    <h3 class="dlg-sub">Couleurs des catégories</h3>
+    <ul class="cat-colors" id="cat-colors"></ul>
+  </dialog>
+
+  <!-- Exporter -->
+  <dialog class="gf-dialog" id="dlg-publish" aria-labelledby="dlg-publish-title">
+    <form method="dialog" class="dlg-close-form"><button class="gf-info-close" aria-label="Fermer">✕</button></form>
+    <h2 id="dlg-publish-title">Exporter la carte</h2>
+    <div class="export-card">
+      <div>
+        <h3>Page HTML à publier</h3>
+        <p>Une seule page qui contient la carte, les données et le code. À téléverser sur un site ou à intégrer avec un <code>&lt;iframe&gt;</code>. Elle peut aussi être rouverte ici pour la modifier.</p>
+      </div>
+      <div class="export-buttons">
+        <button type="button" class="gf-btn" id="btn-export-html">Télécharger la page HTML</button>
+        <button type="button" class="gf-btn gf-btn-ghost" id="btn-preview">Aperçu dans un nouvel onglet</button>
+      </div>
+    </div>
+    <div class="embed">
+      <label for="embed-code">Code d'intégration (une fois la page en ligne, remplacer l'adresse)</label>
+      <textarea id="embed-code" rows="3" readonly></textarea>
+      <button type="button" class="link-btn" id="btn-copy-embed">Copier le code</button>
+    </div>
+    <div class="export-card">
+      <div>
+        <h3>Fichier CSV</h3>
+        <p>Mêmes colonnes et même ordre que le fichier importé, avec vos modifications. Les lignes (tracés) sont dans la colonne <code>geometry</code>.</p>
+      </div>
+      <div class="export-buttons"><button type="button" class="gf-btn gf-btn-ghost" id="btn-export-csv">Télécharger le CSV</button></div>
+    </div>
+    <div class="export-card">
+      <div>
+        <h3>Fichier de projet</h3>
+        <p>Copie complète de la carte (.json), pour la sauvegarder ailleurs ou l'ouvrir sur un autre appareil.</p>
+      </div>
+      <div class="export-buttons"><button type="button" class="gf-btn gf-btn-ghost" id="btn-export-json">Télécharger le projet</button></div>
+    </div>
+  </dialog>
+
+  <!-- Rapport d'import -->
+  <dialog class="gf-dialog" id="dlg-report" aria-labelledby="dlg-report-title">
+    <form method="dialog" class="dlg-close-form"><button class="gf-info-close" aria-label="Fermer">✕</button></form>
+    <h2 id="dlg-report-title">Fichier importé</h2>
+    <div id="report-body"></div>
+    <form method="dialog" class="dlg-actions"><button class="gf-btn">Voir la carte</button></form>
+  </dialog>
+
+  <!-- À propos -->
+  <div class="gf-info-overlay" id="gfInfoOverlay" role="dialog" aria-modal="true" aria-labelledby="gfInfoTitle">
+    <div class="gf-info-panel" tabindex="-1">
+      <button class="gf-info-close" id="gfInfoClose" type="button" aria-label="Fermer">✕</button>
+      <h2 id="gfInfoTitle">Éditeur de carte</h2>
+      <p>Cet outil sert à monter une carte de lieux à partir d'un fichier CSV (par exemple un export Mapme), à la corriger et à la publier en une page HTML autonome, à intégrer dans un autre site.</p>
+      <p><strong>Vos données restent sur votre appareil.</strong> Le fichier est lu par votre navigateur et les cartes sont enregistrées dans ce navigateur seulement. Rien n'est envoyé à un serveur.</p>
+      <h3>Comment faire</h3>
+      <div class="gf-faq">
+        <details>
+          <summary>Déplacer un point ou une ligne</summary>
+          <p>Sélectionnez le lieu (sur la carte ou dans la liste), puis glissez le point, ou les sommets de la ligne. Clic droit sur un sommet pour le retirer.</p>
+        </details>
+        <details>
+          <summary>Lieux « à vérifier »</summary>
+          <p>Ce sont les lignes du fichier sans position, ou placées à plus de 100 km des autres (souvent une adresse mal géocodée). Ils restent dans le CSV exporté ; ceux sans position n'apparaissent pas sur la carte publiée.</p>
+        </details>
+        <details>
+          <summary>Publier la carte</summary>
+          <p>Exporter → Télécharger la page HTML. Mettez le fichier en ligne (GitHub Pages, votre site), puis intégrez-le avec le code d'<code>iframe</code> fourni. Ouverte directement depuis votre disque, la page peut afficher un fond de carte bloqué : c'est une règle d'OpenStreetMap, une fois en ligne tout s'affiche.</p>
+        </details>
+      </div>
+      <h3>Conçu par</h3>
+      <a class="gf-person" href="https://gabfortin.com" target="_blank" rel="noopener author">
+        <img src="img/avatar.jpg" alt="" width="48" height="48" loading="lazy">
+        <span>
+          <strong>Gabriel Fortin</strong>
+          <span>Conseiller d'arrondissement du Plateau-Mont-Royal, district de Jeanne-Mance</span>
+        </span>
+      </a>
+      <p class="gf-note">Projet personnel : cet outil n'est pas un service de l'arrondissement du Plateau-Mont-Royal ni de la Ville de Montréal.</p>
+      <p>Développé par <a href="https://gabfortin.com" target="_blank" rel="noopener">Gabriel Fortin</a> · <a href="confidentialite.html">Politique de confidentialité</a></p>
+    </div>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite"><span id="toast-text"></span><button type="button" id="toast-action" hidden></button></div>
+
+  <noscript><p class="noscript">Cet outil requiert JavaScript.</p></noscript>
+
+  <script src="vendor/leaflet-1.9.4/leaflet.js" defer></script>
+  <script src="js/csv.js?v=2026-11-05-1" defer></script>
+  <script src="js/sanitize.js?v=2026-11-05-1" defer></script>
+  <script src="js/model.js?v=2026-11-05-1" defer></script>
+  <script src="js/store.js?v=2026-11-05-1" defer></script>
+  <script src="js/export-html.js?v=2026-11-05-1" defer></script>
+  <script src="js/app.js?v=2026-11-05-1" defer></script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="fr-CA">
+<head><meta charset="UTF-8"><title>Charger l'exemple · Éditeur de carte</title></head>
+<body>
+<p id="msg">Chargement de l'exemple…</p>
+<script src="../js/csv.js"></script>
+<script src="../js/sanitize.js"></script>
+<script src="../js/model.js"></script>
+<script src="../js/store.js"></script>
+<script>
+  // Enregistre exemple-mapme.csv comme carte dans ce navigateur, puis ouvre l'éditeur.
+  // Utile pour essayer l'outil et pour les captures d'écran de vérification.
+  fetch('exemple-mapme.csv').then(r => r.text()).then(text => {
+    const p = Model.projectFromCsv(CSV.parse(text), 'exemple-mapme.csv');
+    p.title = 'Exemple (export Mapme)';
+    const line = Model.newFeature(p, 'line', [[45.5255, -73.5871], [45.5236, -73.5815], [45.5219, -73.5768], [45.5199, -73.5715]]);
+    Model.set(p, line, 'name', 'Exemple de ligne');
+    Model.setCategories(p, line, ['Espaces verts']);
+    p.features.push(line);
+    return Store.save(p);
+  }).then(() => {
+    const sel = new URLSearchParams(location.search).get('select');
+    location.href = '../index.html' + (sel ? '#select=' + sel : '');
+  }).catch(e => { document.getElementById('msg').textContent = 'Erreur : ' + e.message; });
+</script>
+</body>
+</html>
