@@ -12,6 +12,18 @@
   var feats = project.features.filter(function (f) { return M.hasPosition(project, f); });
   var byUid = new Map(feats.map(function (f) { return [f.uid, f]; }));
 
+  // Lignes et zones rattachées à un point (colonne parentId) : elles font partie de ce lieu. Elles ouvrent
+  // sa fiche, suivent ses filtres et ne sont pas listées à part.
+  var parentOf = new Map(), linesOf = new Map();
+  feats.forEach(function (f) {
+    var g = M.getParent(project, f);
+    if (!g || !byUid.has(g.uid)) return;
+    parentOf.set(f.uid, g);
+    if (!linesOf.has(g.uid)) linesOf.set(g.uid, []);
+    linesOf.get(g.uid).push(f.uid);
+  });
+  function owner(f) { return parentOf.get(f.uid) || f; }
+
   var map = L.map('map', { zoomControl: false, attributionControl: true });
   L.control.zoom({ position: 'bottomright' }).addTo(map);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -24,11 +36,20 @@
 
   // ── Calques ──
   var layers = new Map();
-  feats.forEach(function (f) {
-    var c = M.colorOf(project, f);
-    // Point : disque de la couleur de la catégorie avec son icône blanche (js/icons.js)
-    var layer = M.kind(project, f) === 'line'
-      ? L.polyline(M.getPath(project, f), { color: c, weight: 6, opacity: .9, lineCap: 'round', renderer: renderer })
+  var STYLE = {
+    line: { normal: { weight: 6 }, active: { weight: 9 } },
+    area: { normal: { weight: 2.5, fillOpacity: .22 }, active: { weight: 4, fillOpacity: .35 } }
+  };
+  // Zones dessinées en premier : elles restent sous les lignes (les points sont dans leur propre couche)
+  var order = { area: 0, line: 1, point: 2 };
+  feats.slice().sort(function (a, b) { return order[M.kind(project, a)] - order[M.kind(project, b)]; }).forEach(function (f) {
+    var c = M.colorOf(project, f), k = M.kind(project, f);
+    // Zone : polygone semi-transparent. Ligne : trait. Point : disque de la couleur de la
+    // catégorie avec son icône blanche (js/icons.js).
+    var layer = k === 'area'
+      ? L.polygon(M.getPath(project, f), Object.assign({ color: c, fillColor: c, opacity: 1, lineJoin: 'round', renderer: renderer }, STYLE.area.normal))
+      : k === 'line'
+      ? L.polyline(M.getPath(project, f), Object.assign({ color: c, opacity: .9, lineCap: 'round', renderer: renderer }, STYLE.line.normal))
       : L.marker(M.getLatLng(project, f), {
         icon: L.divIcon({
           className: 'vw-pin', iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -12],
@@ -36,17 +57,17 @@
         }),
         keyboard: false, riseOnHover: true
       });
-    layer.bindPopup(function () { return popupHtml(f); }, { maxWidth: 320, autoPanPaddingTopLeft: [24, 90], autoPanPaddingBottomRight: [24, 24] });
-    layer.on('click', function () { select(f.uid, false); });
-    layer.on('popupclose', function () { if (selected === f.uid) setActive(null); });
+    layer.bindPopup(function () { return popupHtml(owner(f)); }, { maxWidth: 320, autoPanPaddingTopLeft: [24, 90], autoPanPaddingBottomRight: [24, 24] });
+    layer.on('click', function () { select(owner(f).uid, false); });
+    layer.on('popupclose', function () { if (selected === owner(f).uid) setActive(null); });
     layer.on('add', function () {
       var el = layer.getElement && layer.getElement();
       if (!el) return;
       el.setAttribute('tabindex', '0');
       el.setAttribute('role', 'button');
-      el.setAttribute('aria-label', name(f));
+      el.setAttribute('aria-label', parentOf.has(f.uid) ? 'Tracé : ' + name(owner(f)) : name(f));
       el.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(f.uid, false); layer.openPopup(); }
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(owner(f).uid, false); layer.openPopup(); }
       });
     });
     layers.set(f.uid, layer);
@@ -74,7 +95,7 @@
   var stats = M.categoryStats(project);
   var chips = $('#chips');
   if (stats.size) {
-    var html = '<button type="button" class="chip" data-cat="" aria-pressed="true">Toutes <span class="n">' + feats.length + '</span></button>';
+    var html = '<button type="button" class="chip" data-cat="" aria-pressed="true">Toutes <span class="n">' + (feats.length - parentOf.size) + '</span></button>';
     Array.from(stats.keys()).sort(function (a, b) { return a.localeCompare(b, 'fr'); }).forEach(function (c) {
       html += '<button type="button" class="chip" data-cat="' + S.escape(c) + '" aria-pressed="false">' +
         '<i class="dot dot-icon" style="--c:' + S.escape(project.settings.categoryColors[c] || project.settings.accent) + '" aria-hidden="true">' +
@@ -110,6 +131,7 @@
   }
 
   function visible(f) {
+    if (parentOf.has(f.uid)) return visible(parentOf.get(f.uid));
     if (activeCat && M.getCategories(project, f).indexOf(activeCat) === -1) return false;
     if (query.trim()) {
       var words = fold(query).split(/\s+/).filter(Boolean);
@@ -120,12 +142,13 @@
   }
 
   function render() {
-    var shown = feats.filter(visible);
+    var shownAll = feats.filter(visible);
     layers.forEach(function (layer, uid) {
-      var on = shown.indexOf(byUid.get(uid)) !== -1;
+      var on = shownAll.indexOf(byUid.get(uid)) !== -1;
       if (on && !map.hasLayer(layer)) layer.addTo(map);
       if (!on && map.hasLayer(layer)) map.removeLayer(layer);
     });
+    var shown = shownAll.filter(function (f) { return !parentOf.has(f.uid); }); // liste : un lieu = une entrée
     $('#count').textContent = shown.length + (shown.length > 1 ? ' lieux' : ' lieu');
     var list = $('#list');
     if (!shown.length) {
@@ -143,7 +166,16 @@
 
   // ── Sélection ──
   var selected = null;
+  // Lignes et zones du lieu sélectionné : mises en évidence
+  function emphasize(uid, on) {
+    (linesOf.get(uid) || []).forEach(function (l) {
+      var ly = layers.get(l), st = STYLE[M.kind(project, byUid.get(l))];
+      if (ly && st) ly.setStyle(on ? st.active : st.normal);
+    });
+  }
   function setActive(uid) {
+    if (selected) emphasize(selected, false);
+    if (uid) emphasize(uid, true);
     selected = uid;
     document.querySelectorAll('.item.active').forEach(function (b) { b.classList.remove('active'); });
     if (uid) {

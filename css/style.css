@@ -378,8 +378,9 @@ input[type="color"]::-webkit-color-swatch { border: none; border-radius: 5px; }
 .format-help ul { margin: 4px 0; padding-left: 18px; }
 
 .list-tools { display: flex; flex-direction: column; gap: 10px; padding: 2px 14px 8px; }
-.add-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.add-row .gf-btn { padding-inline: 10px; }
+.add-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.add-row .gf-btn { padding-inline: 8px; }
+.add-row-label { grid-column: 1 / -1; font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-500); }
 .search { position: relative; }
 .search svg { position: absolute; left: 12px; top: 50%; width: 15px; height: 15px; transform: translateY(-50%); fill: none; stroke: var(--ink-500); stroke-width: 2.4; stroke-linecap: round; }
 .search input {
@@ -472,6 +473,11 @@ input[type="color"]::-webkit-color-swatch { border: none; border-radius: 5px; }
 
 .position-text { font-size: .8rem; color: var(--ink-700); font-variant-numeric: tabular-nums; }
 .position-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.attach-field { padding: 10px 12px; border-radius: 12px; background: var(--chip); }
+.attach-select { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; font-size: .74rem; color: var(--ink-500); }
+.attach-select select { width: 100%; min-width: 0; font: inherit; font-size: .8rem; color: var(--ink-900); padding: 6px 8px; border-radius: 8px; border: 1px solid var(--hairline); background: var(--glass-strong); }
+.children-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.children-list button { font: inherit; font-size: .8rem; text-align: left; background: none; border: none; padding: 2px 0; color: var(--brand-ink); cursor: pointer; text-decoration: underline; }
 .other-fields { margin: 4px 0 14px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--chip); }
 .other-fields summary { cursor: pointer; font-size: .78rem; font-weight: 600; color: var(--ink-700); }
 .other-fields label { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; font-size: .72rem; font-weight: 600; color: var(--ink-700); }
@@ -610,3 +616,6 @@ input[type="color"]::-webkit-color-swatch { border: none; border-radius: 5px; }
     transition-duration: .001ms !important; scroll-behavior: auto !important;
   }
 }
+
+/* Mesure pendant un tracé (aperçu en pointillé jusqu'au curseur) */
+.ed-measure.leaflet-tooltip { font-variant-numeric: tabular-nums; pointer-events: none; }

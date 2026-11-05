@@ -94,6 +94,49 @@
   const reparsed = Model.projectFromCsv(CSV.parse(Model.toCsv(p)), 'x.csv');
   const relu = reparsed.features.find(f => f.row.name === 'Piste test');
   check('ligne : survit à un aller-retour CSV', relu && Model.kind(reparsed, relu) === 'line' && Model.getPath(reparsed, relu).length === 3);
+  // Ligne rattachée à un point (colonne parentId)
+  const pt = p.features[0];
+  const ptRow = JSON.stringify(pt.row);
+  check('rattachement : aucun au départ', Model.getParent(p, line) === null && !p.roles.parent);
+  Model.setParent(p, line, pt);
+  check('rattachement : colonne parentId ajoutée en fin, avec l\'id du point', p.columns[p.columns.length - 1] === 'parentId' && line.row.parentId === pt.row.mapmeId);
+  check('rattachement : point retrouvé et ligne listée sous le point', Model.getParent(p, line) === pt && Model.childrenOf(p, pt)[0] === line);
+  check('rattachement : la ligne prend la couleur et l\'icône du point', Model.colorOf(p, line) === Model.colorOf(p, pt) && Model.iconOf(p, line) === Model.iconOf(p, pt));
+  check('rattachement : la rangée du point n\'est pas modifiée (hors colonne ajoutée)', JSON.stringify(Object.assign({}, pt.row, { parentId: undefined })) === JSON.stringify(Object.assign(JSON.parse(ptRow), { parentId: undefined })));
+  const rp = Model.projectFromCsv(CSV.parse(Model.toCsv(p)), 'x.csv');
+  const rl = rp.features.find(f => f.row.name === 'Piste test');
+  check('rattachement : survit à un aller-retour CSV', rl && Model.getParent(rp, rl) && Model.getParent(rp, rl).row.mapmeId === pt.row.mapmeId);
+  const sansId = Model.newFeature(p, 'point', [45.51, -73.57]); sansId.row.mapmeId = ''; p.features.push(sansId);
+  const l2 = Model.newFeature(p, 'line', path); p.features.push(l2);
+  Model.setParent(p, l2, sansId);
+  check('rattachement à un point sans identifiant : un UUID lui est donné', /^[0-9a-f-]{36}$/.test(sansId.row.mapmeId) && Model.getParent(p, l2) === sansId);
+  Model.setParent(p, l2, null);
+  check('détacher vide le lien', l2.row.parentId === '' && Model.getParent(p, l2) === null);
+  check('une ligne ne peut pas être le « point » d\'une autre', (Model.setParent(p, l2, line), Model.getParent(p, l2) === null));
+  p.features.splice(p.features.indexOf(l2), 1);
+  p.features.splice(p.features.indexOf(sansId), 1);
+
+  // Zones (polygones)
+  const ringWkt = 'POLYGON ((-73.58 45.52, -73.57 45.52, -73.57 45.53, -73.58 45.52))';
+  const g1 = Model.parseGeometry(ringWkt);
+  check('zone : POLYGON lu, anneau ouvert en mémoire', g1.type === 'area' && g1.path.length === 3 && g1.path[0][0] === 45.52 && g1.path[0][1] === -73.58);
+  check('zone : WKT écrit fermé (1er sommet répété)', Model.toWkt(g1.path, 'area') === ringWkt);
+  check('zone : GeoJSON Polygon accepté', Model.parseGeometry('{"type":"Polygon","coordinates":[[[-73.5,45.5],[-73.6,45.5],[-73.6,45.6],[-73.5,45.5]]]}').type === 'area');
+  check('zone : moins de 3 sommets refusée', Model.parseGeometry('POLYGON ((-73.5 45.5, -73.6 45.5, -73.5 45.5))') === null);
+  const sq = [[45.5, -73.6], [45.5, -73.6 + 100 / (111320 * Math.cos(45.5 * Math.PI / 180))], [45.5 + 100 / 111195, -73.6 + 100 / (111320 * Math.cos(45.5 * Math.PI / 180))], [45.5 + 100 / 111195, -73.6]];
+  check('zone : superficie d\'un carré de 100 m ≈ 10 000 m²', Math.abs(Model.areaM2(sq) - 10000) < 100, Model.areaM2(sq));
+  const zone = Model.newFeature(p, 'area', g1.path);
+  p.features.push(zone);
+  Model.set(p, zone, 'name', 'Zone test');
+  check('zone : nouvelle zone de type area, avec position', Model.kind(p, zone) === 'area' && Model.hasPosition(p, zone) && Model.isShape(p, zone));
+  const moved2 = Model.getPath(p, zone); moved2[0] = [45.521, -73.581]; Model.setPath(p, zone, moved2);
+  check('zone : déplacer un sommet la garde zone', Model.kind(p, zone) === 'area' && zone.row.geometry.startsWith('POLYGON'));
+  Model.setParent(p, zone, pt);
+  check('zone : rattachée au point, en prend la couleur', Model.getParent(p, zone) === pt && Model.colorOf(p, zone) === Model.colorOf(p, pt) && Model.childrenOf(p, pt).includes(zone));
+  const rz = Model.projectFromCsv(CSV.parse(Model.toCsv(p)), 'x.csv').features;
+  const rzone = rz.find(f => f.row.name === 'Zone test');
+  check('zone : survit à un aller-retour CSV, avec son rattachement', rzone && rzone.row.geometry === zone.row.geometry && rzone.row.parentId === pt.row.mapmeId);
+
   check('GeoJSON accepté dans geometry', Model.parseWkt('{"type":"LineString","coordinates":[[-73.5,45.5],[-73.6,45.6]]}')[1][0] === 45.6);
 
   // ── Nettoyage HTML ──
@@ -126,9 +169,11 @@
   await new Promise(r => setTimeout(r, 400));
   const doc = frame.contentDocument;
   const items = doc.querySelectorAll('.item');
-  // 9 lieux dont 2 sans position → 7 affichés (6 points + 1 ligne)
-  check('carte exportée : 7 lieux listés', items.length === 7, items.length);
-  check('carte exportée : 7 tracés sur la carte', doc.querySelectorAll('.leaflet-interactive').length === 7, doc.querySelectorAll('.leaflet-interactive').length);
+  // 10 lieux dont 2 sans position → 8 affichés (6 points + 1 ligne + 1 zone, toutes deux rattachées au 1er point, non listées à part)
+  check('carte exportée : 6 lieux listés (ligne et zone rattachées comprises dans leur point)', items.length === 6, items.length);
+  check('carte exportée : 8 éléments sur la carte', doc.querySelectorAll('.leaflet-interactive').length === 8, doc.querySelectorAll('.leaflet-interactive').length);
+  const zonePath = [...doc.querySelectorAll('path.leaflet-interactive')].find(e => e.getAttribute('fill') !== 'none');
+  check('carte exportée : zone remplie en semi-transparence', zonePath && Number(zonePath.getAttribute('fill-opacity')) > 0 && Number(zonePath.getAttribute('fill-opacity')) < .5);
   check('carte exportée : lieux en disques avec icône', doc.querySelectorAll('.vw-disc svg').length === 6, doc.querySelectorAll('.vw-disc svg').length);
   check('carte exportée : filtres de catégorie', doc.querySelectorAll('.chip').length === Model.categoryStats(p).size + 1);
   doc.querySelector('.item').click();
@@ -136,6 +181,14 @@
   const pop = doc.querySelector('.leaflet-popup .pop');
   check('carte exportée : fenêtre du lieu ouverte au clic', !!pop, 'aucune fenêtre');
   check('carte exportée : aucune balise script dans la fenêtre', pop && !pop.querySelector('script'));
+  frame.contentWindow.document.querySelector('.leaflet-popup-close-button')?.click();
+  await new Promise(r => setTimeout(r, 300));
+  const pathEl = doc.querySelector('path.leaflet-interactive');
+  const box = pathEl.getBoundingClientRect();
+  pathEl.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 }));
+  await new Promise(r => setTimeout(r, 400));
+  const pop2 = doc.querySelector('.leaflet-popup .pop h2');
+  check('carte exportée : le tracé rattaché (zone dessinée en premier) ouvre la fiche de son point', pop2 && pop2.textContent === Model.get(p, pt, 'name'), pop2 && pop2.textContent);
 
   document.getElementById('summary').textContent = fail ? `${fail} échec(s), ${pass} réussi(s)` : `Tous les tests passent (${pass})`;
   document.getElementById('summary').className = fail ? 'ko' : 'ok';

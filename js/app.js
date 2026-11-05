@@ -11,15 +11,18 @@
   var project = null;
   var analysis = { issues: new Map() };
   var selectedUid = null;
-  var mode = null;            // { type: 'add-point' | 'add-line' | 'place' | 'extend', uid?, path? }
+  var mode = null;            // { type: 'add-point' | 'add-line' | 'add-area' | 'place' | 'extend' | 'attach', uid?, path? }
   var filter = { key: 'all', query: '' };
   var history = [];
   var MAX_HISTORY = 60;
   var layers = new Map();     // uid → marqueur ou polyligne
   var vertexHandles = [];
-  var draft = null;           // polyligne en cours de tracé
+  var draft = null;           // polyligne en cours de tracé (segments déjà posés, trait plein)
+  var ghost = null;           // aperçu en pointillé jusqu'au curseur (comme l'outil Mesurer de Google Maps)
+  var ghostTip = null;        // longueur ou superficie si on cliquait au curseur
+  var lastCursor = null;
 
-  var ROLE_FIELDS = ['id', 'name', 'description', 'categories', 'address', 'lat', 'lng', 'actionText', 'actionUrl', 'geometry'];
+  var ROLE_FIELDS = ['id', 'name', 'description', 'categories', 'address', 'lat', 'lng', 'actionText', 'actionUrl', 'geometry', 'parent'];
   var ISSUE_LABEL = { 'sans-position': 'Sans position', 'loin': 'À vérifier', 'sans-nom': 'Sans nom' };
 
   // ── Carte ──
@@ -133,7 +136,12 @@
   function refresh(scope) {
     analysis = M.analyse(project);
     if (scope.all) return refreshAll();
-    if (scope.uid) updateLayer(scope.uid);
+    if (scope.uid) {
+      updateLayer(scope.uid);
+      // Les lignes rattachées à ce point prennent sa couleur : on les redessine aussi
+      var sf = byUid(scope.uid);
+      if (sf && M.kind(project, sf) === 'point') M.childrenOf(project, sf).forEach(function (c) { updateLayer(c.uid); });
+    }
     if (scope.layers) rebuildLayers();
     refreshFilters();
     refreshList();
@@ -166,7 +174,13 @@
 
   function makeLayer(f) {
     var layer, selected = f.uid === selectedUid;
-    if (M.kind(project, f) === 'line') {
+    var k = M.kind(project, f);
+    if (k === 'area') {
+      layer = L.polygon(M.getPath(project, f), {
+        color: M.colorOf(project, f), weight: selected ? 4 : 2.5, opacity: 1, lineJoin: 'round',
+        fillColor: M.colorOf(project, f), fillOpacity: selected ? .35 : .22, bubblingMouseEvents: false
+      });
+    } else if (k === 'line') {
       layer = L.polyline(M.getPath(project, f), {
         color: M.colorOf(project, f), weight: selected ? 7 : 5, opacity: selected ? 1 : .85, lineCap: 'round',
         bubblingMouseEvents: false
@@ -191,6 +205,14 @@
     }
     layer.bindTooltip(S.escape(name(f) || 'Sans nom'), { className: 'ed-tooltip', direction: 'top', offset: [0, -13] });
     layer.on('click', function (e) {
+      // Rattacher une ligne : le clic sur un point le choisit
+      if (mode && mode.type === 'attach') {
+        if (M.kind(project, f) !== 'point') { toast('Choisissez un point, pas une ligne ou une zone.'); return; }
+        var lineUid = mode.uid;
+        cancelMode();
+        attachLine(lineUid, f.uid);
+        return;
+      }
       // Pendant un ajout ou un tracé, un clic sur un lieu existant compte comme un clic sur la carte
       if (mode) { map.fire('click', { latlng: e.latlng }); return; }
       select(f.uid, { fly: false, from: 'map' });
@@ -225,6 +247,7 @@
     var k = filter.key;
     if (k === 'issues' && !analysis.issues.has(f.uid)) return false;
     if (k === 'lines' && M.kind(project, f) !== 'line') return false;
+    if (k === 'areas' && M.kind(project, f) !== 'area') return false;
     if (k.indexOf('cat:') === 0 && M.getCategories(project, f).indexOf(k.slice(4)) === -1) return false;
     if (filter.query.trim()) {
       var hay = fold([name(f), M.get(project, f, 'address'), M.get(project, f, 'categories')].join(' '));
@@ -245,9 +268,11 @@
   function refreshFilters() {
     var stats = M.categoryStats(project);
     var lines = project.features.filter(function (f) { return M.kind(project, f) === 'line'; }).length;
+    var areas = project.features.filter(function (f) { return M.kind(project, f) === 'area'; }).length;
     var chips = [{ key: 'all', label: 'Tous', n: project.features.length }];
     if (analysis.issues.size) chips.push({ key: 'issues', label: 'À vérifier', n: analysis.issues.size, warn: true });
     if (lines) chips.push({ key: 'lines', label: 'Lignes', n: lines });
+    if (areas) chips.push({ key: 'areas', label: 'Zones', n: areas });
     Array.from(stats.entries()).sort(function (a, b) { return b[1] - a[1] || a[0].localeCompare(b[0], 'fr'); }).forEach(function (e) {
       chips.push({ key: 'cat:' + e[0], label: e[0], n: e[1], color: project.settings.categoryColors[e[0]] });
     });
@@ -276,9 +301,13 @@
       return;
     }
     list.innerHTML = shown.map(function (f) {
-      var n = name(f), issue = analysis.issues.get(f.uid), line = M.kind(project, f) === 'line';
+      var n = name(f), issue = analysis.issues.get(f.uid), k = M.kind(project, f), line = k !== 'point';
+      var kindLabel = { line: 'Ligne', area: 'Zone' }[k];
       var cats = M.getCategories(project, f);
-      var sub = [line ? 'Ligne' : '', cats[0] || '', M.displayAddress(project, f)].filter(Boolean).join(' · ');
+      var parent = line ? M.getParent(project, f) : null;
+      var sub = parent
+        ? kindLabel + ' rattachée à « ' + (name(parent) || 'Sans nom') + ' »'
+        : [kindLabel || '', cats[0] || '', M.displayAddress(project, f)].filter(Boolean).join(' · ');
       return '<li><button type="button" class="item' + (line ? ' line' : '') + (f.uid === selectedUid ? ' active' : '') +
         '" data-uid="' + f.uid + '" style="--c:' + S.escape(M.colorOf(project, f)) + '">' +
         '<span class="item-main"><span class="item-name' + (n ? '' : ' empty') + '">' + S.escape(n || 'Sans nom') + '</span>' +
@@ -307,7 +336,7 @@
     map.fitBounds(bounds, { paddingTopLeft: p.tl, paddingBottomRight: p.br, maxZoom: maxZoom || 16 });
   }
   function featureBounds(f) {
-    if (M.kind(project, f) === 'line') return L.latLngBounds(M.getPath(project, f));
+    if (M.isShape(project, f)) return L.latLngBounds(M.getPath(project, f));
     var ll = M.getLatLng(project, f);
     return ll ? L.latLngBounds([ll, ll]) : null;
   }
@@ -324,7 +353,7 @@
     var b = featureBounds(f);
     if (!b) return;
     var p = visiblePadding();
-    var z = M.kind(project, f) === 'line' ? Math.min(map.getBoundsZoom(b, false, p.tl.add(p.br)), 17) : Math.max(map.getZoom(), 16);
+    var z = M.isShape(project, f) ? Math.min(map.getBoundsZoom(b, false, p.tl.add(p.br)), 17) : Math.max(map.getZoom(), 16);
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       map.fitBounds(b, { paddingTopLeft: p.tl, paddingBottomRight: p.br, maxZoom: z, animate: false });
     } else {
@@ -367,7 +396,7 @@
   function clearHandles() { handleGroup.clearLayers(); vertexHandles = []; }
   function showHandles(f) {
     clearHandles();
-    if (!f || M.kind(project, f) !== 'line') return;
+    if (!f || !M.isShape(project, f)) return;
     var path = M.getPath(project, f);
     var color = M.colorOf(project, f);
     // Le calque de la ligne peut être recréé pendant l'édition : toujours relire le courant
@@ -382,7 +411,8 @@
         var line = lineLayer();
         if (!line) return;
         var pts = line.getLatLngs();
-        pts[i] = h.getLatLng();
+        var ring = Array.isArray(pts[0]) ? pts[0] : pts; // zone (polygone) : un anneau imbriqué
+        ring[i] = h.getLatLng();
         line.setLatLngs(pts);
       });
       h.on('dragend', function () {
@@ -398,7 +428,8 @@
       h.on('contextmenu', function (e) {
         L.DomEvent.preventDefault(e.originalEvent);
         var cur = M.getPath(project, f);
-        if (cur.length <= 2) { toast('Une ligne garde au moins deux sommets.'); return; }
+        var minPts = M.kind(project, f) === 'area' ? 3 : 2;
+        if (cur.length <= minPts) { toast(minPts === 3 ? 'Une zone garde au moins trois sommets.' : 'Une ligne garde au moins deux sommets.'); return; }
         mutate(function () { cur.splice(i, 1); M.setPath(project, f, cur); }, { uid: f.uid });
         showHandles(f);
         fillPosition(f);
@@ -416,9 +447,8 @@
   }
 
   function fillForm(f) {
-    var line = M.kind(project, f) === 'line';
     var badge = $('#edit-kind');
-    badge.textContent = line ? 'Ligne' : 'Point';
+    badge.textContent = { line: 'Ligne', area: 'Zone', point: 'Point' }[M.kind(project, f)];
     badge.style.setProperty('--c', M.colorOf(project, f));
 
     var issue = analysis.issues.get(f.uid), note = $('#edit-issue');
@@ -433,6 +463,7 @@
     $('#f-desc-code').value = raw;
     setSourceMode(false);
     fillPosition(f);
+    fillAttach(f);
 
     var others = otherColumns();
     $('#other-fields').hidden = !others.length;
@@ -448,9 +479,13 @@
   }
 
   function fillPosition(f) {
-    var line = M.kind(project, f) === 'line';
+    var k = M.kind(project, f), line = k !== 'point';
     var txt;
-    if (line) {
+    if (k === 'area') {
+      var ring = M.getPath(project, f), m2 = M.areaM2(ring);
+      txt = plural(ring.length, 'sommet', 'sommets') + ' · environ ' +
+        (m2 < 10000 ? fmtNum(Math.round(m2)) + ' m²' : (m2 / 10000).toFixed(2).replace('.', ',') + ' ha');
+    } else if (k === 'line') {
       var path = M.getPath(project, f), km = 0;
       for (var i = 1; i < path.length; i++) km += M.distanceKm(path[i - 1], path[i]);
       txt = plural(path.length, 'sommet', 'sommets') + ' · ' + (km < 1 ? Math.round(km * 1000) + ' m' : km.toFixed(2).replace('.', ',') + ' km');
@@ -463,6 +498,41 @@
     $('#btn-place').textContent = M.getLatLng(project, f) ? 'Placer ailleurs' : 'Placer sur la carte';
     $('#btn-zoom').hidden = !M.hasPosition(project, f);
     $('#btn-extend').hidden = !line;
+    $('#btn-extend').textContent = k === 'area' ? 'Ajouter des sommets' : 'Prolonger la ligne';
+  }
+
+  // Ligne ou zone : lieu rattaché (choix sur la carte ou dans la liste). Point : ses tracés rattachés.
+  function fillAttach(f) {
+    var k = M.kind(project, f), line = k !== 'point';
+    $('#attach-field').hidden = !line;
+    var kids = line ? [] : M.childrenOf(project, f);
+    $('#children-field').hidden = !kids.length;
+    $('#children-list').innerHTML = kids.map(function (c) {
+      var ck = M.kind(project, c) === 'area' ? 'Zone' : 'Ligne';
+      return '<li><button type="button" data-goto="' + c.uid + '">' + ck + ' : ' + S.escape(name(c) || 'sans nom') + '</button></li>';
+    }).join('');
+    if (!line) return;
+    var parent = M.getParent(project, f);
+    $('#attach-text').textContent = parent
+      ? 'Rattachée à « ' + (name(parent) || 'Sans nom') + ' ». Elle en prend la couleur et, sur la carte publiée, ouvre sa fiche.'
+      : 'Aucun. Rattachez ' + (k === 'area' ? 'la zone' : 'la ligne') + ' à un point pour qu\'elle en prenne la couleur et ouvre sa fiche sur la carte publiée.';
+    $('#btn-attach').textContent = parent ? 'Choisir un autre point' : 'Choisir un point sur la carte';
+    $('#btn-goto-parent').hidden = !parent;
+    $('#btn-detach').hidden = !parent;
+    var points = project.features.filter(function (g) { return M.kind(project, g) === 'point' && M.getLatLng(project, g); })
+      .sort(function (a, b) { return (name(a) || '~').localeCompare(name(b) || '~', 'fr'); });
+    $('#f-parent').innerHTML = '<option value="">Aucun</option>' + points.map(function (g) {
+      return '<option value="' + g.uid + '"' + (g === parent ? ' selected' : '') + '>' + S.escape(name(g) || 'Sans nom') + '</option>';
+    }).join('');
+  }
+
+  function attachLine(lineUid, pointUid) {
+    var f = byUid(lineUid), g = pointUid ? byUid(pointUid) : null;
+    if (!f) return;
+    mutate(function () { M.setParent(project, f, g); }, { uid: f.uid });
+    select(f.uid, { fly: false });
+    var what = M.kind(project, f) === 'area' ? 'Zone' : 'Ligne';
+    toast(g ? what + ' rattachée à « ' + (name(g) || 'Sans nom') + ' ».' : what + ' détachée.', { tone: 'success' });
   }
 
   function fillCats(f) {
@@ -527,26 +597,76 @@
       'add-point': 'Cliquez sur la carte pour placer le nouveau point.',
       'add-line': 'Cliquez pour ajouter des sommets. Double-clic ou Entrée pour terminer.',
       'place': 'Cliquez sur la carte pour placer ce lieu.',
-      'extend': 'Cliquez pour ajouter des sommets au bout de la ligne.'
+      'extend': 'Cliquez pour ajouter des sommets au bout de la ligne.',
+      'add-area': 'Cliquez pour placer les sommets de la zone. Double-clic ou Entrée pour la fermer.',
+      'attach': 'Cliquez sur le point auquel rattacher ce tracé.'
     }[m.type];
     $('#mode-text').textContent = text;
-    $('#mode-finish').hidden = !(m.type === 'add-line' || m.type === 'extend');
-    $('#mode-finish').textContent = m.type === 'extend' ? 'Terminer' : 'Terminer la ligne';
+    var drawing = m.type === 'add-line' || m.type === 'add-area' || m.type === 'extend';
+    $('#mode-finish').hidden = !drawing;
+    $('#mode-finish').textContent = { extend: 'Terminer', 'add-area': 'Fermer la zone' }[m.type] || 'Terminer la ligne';
     $('#mode-bar').hidden = false;
-    if (m.type === 'add-line' || m.type === 'extend') {
+    if (drawing) {
       map.doubleClickZoom.disable();
       var base = m.type === 'extend' ? M.getPath(project, byUid(m.uid)) : [];
       m.path = base.slice();
       m.start = base.length;
-      draft = L.polyline(m.path, { color: project.settings.accent, weight: 4, dashArray: '6 8', interactive: false }).addTo(map);
+      var areaDraft = m.type === 'add-area' || (m.type === 'extend' && M.kind(project, byUid(m.uid)) === 'area');
+      draft = (areaDraft ? L.polygon : L.polyline)(m.path, {
+        color: project.settings.accent, weight: 4, interactive: false,
+        fillColor: project.settings.accent, fillOpacity: areaDraft ? .15 : 0
+      }).addTo(map);
+      m.area = areaDraft;
+      ghost = L.polyline([], { color: project.settings.accent, weight: 3, opacity: .85, dashArray: '2 8', lineCap: 'round', interactive: false }).addTo(map);
+      ghostTip = L.tooltip({ permanent: true, direction: 'right', offset: [14, 0], className: 'ed-tooltip ed-measure', interactive: false });
     }
     if (!desktopMQ.matches) setSidebarOpenMobile(false);
     updateFinishState();
   }
 
+  // Aperçu pendant un tracé : pointillé du dernier sommet jusqu'au curseur (et, pour une zone,
+  // du curseur jusqu'au premier sommet), avec la longueur ou la superficie qu'on obtiendrait.
+  function updateGhost() {
+    if (!ghost || !mode || !mode.path) return;
+    var path = mode.path, cur = lastCursor;
+    if (!cur || !path.length) {
+      ghost.setLatLngs([]);
+      if (ghostTip) map.removeLayer(ghostTip);
+      return;
+    }
+    var last = path[path.length - 1];
+    ghost.setLatLngs(mode.area && path.length >= 2 ? [last, cur, path[0]] : [last, cur]);
+    var txt;
+    if (mode.area) {
+      if (path.length < 2) { txt = ''; }
+      else {
+        var m2 = M.areaM2(path.concat([cur]));
+        txt = m2 < 10000 ? fmtNum(Math.round(m2)) + ' m²' : (m2 / 10000).toFixed(2).replace('.', ',') + ' ha';
+      }
+    } else {
+      var km = M.distanceKm(last, cur);
+      for (var i = 1; i < path.length; i++) km += M.distanceKm(path[i - 1], path[i]);
+      txt = km < 1 ? fmtNum(Math.round(km * 1000)) + ' m' : km.toFixed(2).replace('.', ',') + ' km';
+    }
+    if (!txt) { map.removeLayer(ghostTip); return; }
+    ghostTip.setLatLng(cur).setContent(txt);
+    if (!map.hasLayer(ghostTip)) ghostTip.addTo(map);
+  }
+
+  map.on('mousemove', function (e) {
+    if (!mode || !mode.path) return;
+    lastCursor = [e.latlng.lat, e.latlng.lng];
+    updateGhost();
+  });
+  map.on('mouseout', function () {
+    if (!mode || !mode.path) return;
+    lastCursor = null;
+    updateGhost();
+  });
+
   function updateFinishState() {
     if (!mode || !mode.path) return;
-    $('#mode-finish').disabled = mode.path.length - (mode.start || 0) < (mode.type === 'extend' ? 1 : 2);
+    $('#mode-finish').disabled = mode.path.length - (mode.start || 0) < ({ extend: 1, 'add-area': 3 }[mode.type] || 2);
   }
 
   function cancelMode(silent) {
@@ -555,19 +675,24 @@
     document.body.classList.remove('placing');
     $('#mode-bar').hidden = true;
     if (draft) { map.removeLayer(draft); draft = null; }
+    if (ghost) { map.removeLayer(ghost); ghost = null; }
+    if (ghostTip) { map.removeLayer(ghostTip); ghostTip = null; }
+    lastCursor = null;
     map.doubleClickZoom.enable();
   }
 
   function finishLine() {
     if (!mode || !mode.path) return;
     var m = mode, path = m.path.slice();
-    if (m.type === 'add-line') {
-      if (path.length < 2) { toast('Une ligne a au moins deux sommets.'); return; }
+    if (m.type === 'add-line' || m.type === 'add-area') {
+      var area = m.type === 'add-area';
+      if (path.length < (area ? 3 : 2)) { toast(area ? 'Une zone a au moins trois sommets.' : 'Une ligne a au moins deux sommets.'); return; }
       cancelMode();
       var f;
-      mutate(function () { f = M.newFeature(project, 'line', path); project.features.push(f); }, { layers: true });
+      mutate(function () { f = M.newFeature(project, area ? 'area' : 'line', path); project.features.push(f); }, { layers: true });
       select(f.uid, { fly: false });
       $('#f-name').focus();
+      toast(area ? 'Zone ajoutée.' : 'Ligne ajoutée.', { action: { label: 'Rattacher à un point', run: function () { setMode({ type: 'attach', uid: f.uid }); } } });
     } else {
       cancelMode();
       var g = byUid(m.uid);
@@ -580,6 +705,7 @@
     if (!project) return;
     var ll = [e.latlng.lat, e.latlng.lng];
     if (!mode) { if (selectedUid) deselect(); return; }
+    if (mode.type === 'attach') { toast('Cliquez sur un point existant (ou Échap pour annuler).'); return; }
     if (mode.type === 'add-point') {
       cancelMode();
       var f;
@@ -599,6 +725,7 @@
       if (last && Math.abs(last[0] - ll[0]) < 1e-9 && Math.abs(last[1] - ll[1]) < 1e-9) return;
       mode.path.push(ll);
       draft.setLatLngs(mode.path);
+      updateGhost();
       updateFinishState();
     }
   });
@@ -653,17 +780,18 @@
 
   function showReport(p) {
     var total = p.features.length;
-    var lines = 0, noPos = [], far = [], noName = 0;
+    var lines = 0, areas = 0, noPos = [], far = [], noName = 0;
     p.features.forEach(function (f) {
       if (M.kind(p, f) === 'line') lines++;
+      if (M.kind(p, f) === 'area') areas++;
       var issue = analysis.issues.get(f.uid);
       if (issue === 'sans-position') noPos.push(f);
       if (issue === 'loin') far.push(f);
       if (!M.get(p, f, 'name').trim()) noName++;
     });
-    var points = total - lines - noPos.length;
+    var points = total - lines - areas - noPos.length;
     var cats = M.categoryStats(p).size;
-    var roleNames = { name: 'nom', description: 'description', categories: 'catégories', address: 'adresse', lat: 'latitude', lng: 'longitude', actionText: 'texte du lien', actionUrl: 'lien', geometry: 'ligne (WKT)', id: 'identifiant' };
+    var roleNames = { name: 'nom', description: 'description', categories: 'catégories', address: 'adresse', lat: 'latitude', lng: 'longitude', actionText: 'texte du lien', actionUrl: 'lien', geometry: 'ligne ou zone (WKT)', id: 'identifiant' };
     var recognised = Object.keys(roleNames).filter(function (r) { return p.roles[r]; })
       .map(function (r) { return '<code>' + S.escape(p.roles[r]) + '</code> → ' + roleNames[r]; });
     var listNames = function (arr) {
@@ -672,7 +800,7 @@
     };
     var html = '<ul class="report-list">' +
       '<li><strong>' + fmtNum(total) + '</strong> lignes lues dans « ' + S.escape(p.source.fileName || '') + ' »</li>' +
-      '<li><strong>' + fmtNum(points) + '</strong> points' + (lines ? ' et <strong>' + lines + '</strong> lignes' : '') + ' placés sur la carte</li>' +
+      '<li><strong>' + fmtNum(points) + '</strong> points' + (lines ? ', <strong>' + lines + '</strong> lignes' : '') + (areas ? ', <strong>' + areas + '</strong> zones' : '') + ' placés sur la carte</li>' +
       (cats ? '<li><strong>' + cats + '</strong> catégories</li>' : '') +
       (noPos.length ? '<li><strong>' + noPos.length + '</strong> sans position : ' + listNames(noPos) + '. Filtre « À vérifier » pour les placer.</li>' : '') +
       (far.length ? '<li><strong>' + far.length + '</strong> à plus de 100 km des autres (adresse sans doute mal géocodée) : ' + listNames(far) + '.</li>' : '') +
@@ -963,6 +1091,7 @@
 
     $('#btn-add-point').addEventListener('click', function () { setMode({ type: 'add-point' }); });
     $('#btn-add-line').addEventListener('click', function () { setMode({ type: 'add-line' }); });
+    $('#btn-add-area').addEventListener('click', function () { setMode({ type: 'add-area' }); });
     $('#mode-cancel').addEventListener('click', function () { cancelMode(); });
     $('#mode-finish').addEventListener('click', finishLine);
 
@@ -1070,12 +1199,26 @@
 
     $('#btn-place').addEventListener('click', function () { setMode({ type: 'place', uid: selectedUid }); });
     $('#btn-extend').addEventListener('click', function () { setMode({ type: 'extend', uid: selectedUid }); });
+    $('#btn-attach').addEventListener('click', function () { setMode({ type: 'attach', uid: selectedUid }); });
+    $('#btn-detach').addEventListener('click', function () { attachLine(selectedUid, null); });
+    $('#btn-goto-parent').addEventListener('click', function () {
+      var g = M.getParent(project, byUid(selectedUid));
+      if (g) select(g.uid);
+    });
+    $('#f-parent').addEventListener('change', function (e) { attachLine(selectedUid, e.target.value || null); });
+    $('#children-list').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-goto]');
+      if (b) select(b.dataset.goto);
+    });
     $('#btn-zoom').addEventListener('click', function () { var f = byUid(selectedUid); if (f) flyToFeature(f); });
     $('#btn-delete').addEventListener('click', function () {
       var f = byUid(selectedUid);
       if (!f) return;
       var label = name(f) || 'Sans nom';
-      mutate(function () { project.features.splice(project.features.indexOf(f), 1); }, { layers: true });
+      mutate(function () {
+        M.childrenOf(project, f).forEach(function (c) { M.setParent(project, c, null); });
+        project.features.splice(project.features.indexOf(f), 1);
+      }, { layers: true });
       deselect();
       toast('« ' + label + ' » supprimé.', { action: { label: 'Annuler', run: undo } });
     });
@@ -1096,7 +1239,7 @@
       if (mode && mode.path && !isTyping()) {
         if (e.key === 'Enter') { e.preventDefault(); finishLine(); return; }
         if (e.key === 'Backspace' && mode.path.length > (mode.start || 0)) {
-          e.preventDefault(); mode.path.pop(); draft.setLatLngs(mode.path); updateFinishState(); return;
+          e.preventDefault(); mode.path.pop(); draft.setLatLngs(mode.path); updateGhost(); updateFinishState(); return;
         }
       }
       if (e.key !== 'Escape') return;

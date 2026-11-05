@@ -7,7 +7,7 @@
   <meta name="description" content="Importer un fichier CSV de lieux, placer et modifier des points et des lignes, puis publier la carte en une page HTML à intégrer dans un autre site. Tout reste dans le navigateur.">
   <meta name="author" content="Gabriel Fortin">
   <link rel="author" href="https://gabfortin.com">
-  <meta name="app-version" content="2026-11-05-2">
+  <meta name="app-version" content="2026-11-05-5">
   <meta name="theme-color" content="#eef1ea" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0b1310" media="(prefers-color-scheme: dark)">
   <link rel="icon" type="image/svg+xml" href="img/icon.svg">
@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://tile.openstreetmap.org">
   <link rel="preload" href="fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="vendor/leaflet-1.9.4/leaflet.css">
-  <link rel="stylesheet" href="css/style.css?v=2026-11-05-2">
+  <link rel="stylesheet" href="css/style.css?v=2026-11-05-5">
 </head>
 <body>
   <a class="skip-link" href="#map">Passer à la carte</a>
@@ -107,14 +107,19 @@
         <h2 id="list-title">Lieux <span class="gf-count" id="list-count"></span></h2>
       </div>
       <div class="list-tools">
-        <div class="add-row">
-          <button type="button" class="gf-btn" id="btn-add-point">
+        <div class="add-row" role="group" aria-labelledby="add-row-label">
+          <span class="add-row-label" id="add-row-label">Ajouter</span>
+          <button type="button" class="gf-btn" id="btn-add-point" aria-label="Ajouter un point" title="Ajouter un point">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
-            Ajouter un point
+            Point
           </button>
-          <button type="button" class="gf-btn gf-btn-ghost" id="btn-add-line">
+          <button type="button" class="gf-btn gf-btn-ghost" id="btn-add-line" aria-label="Ajouter une ligne" title="Ajouter une ligne">
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 18 10 8l5 6 5-9"/><circle cx="4" cy="18" r="1.6"/><circle cx="20" cy="5" r="1.6"/></svg>
-            Ajouter une ligne
+            Ligne
+          </button>
+          <button type="button" class="gf-btn gf-btn-ghost" id="btn-add-area" aria-label="Ajouter une zone" title="Ajouter une zone (polygone)">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 7 12 3.5 19.5 8 17.5 19 7 20.5 3.5 13z" stroke-linejoin="round"/></svg>
+            Zone
           </button>
         </div>
         <div class="search">
@@ -137,6 +142,27 @@
       <form class="edit-form" id="edit-form" autocomplete="off" novalidate>
         <p class="kind-badge" id="edit-kind"></p>
         <div class="issue-note" id="edit-issue" hidden></div>
+
+        <!-- Ligne ou zone : point auquel elle est rattachée (colonne parentId) -->
+        <div class="field attach-field" id="attach-field" hidden>
+          <span id="attach-label">Lieu rattaché</span>
+          <p class="position-text" id="attach-text"></p>
+          <div class="position-actions">
+            <button type="button" class="gf-btn gf-btn-ghost small" id="btn-attach">Choisir un point sur la carte</button>
+            <button type="button" class="gf-btn gf-btn-ghost small" id="btn-goto-parent" hidden>Ouvrir ce lieu</button>
+            <button type="button" class="gf-btn gf-btn-ghost small" id="btn-detach" hidden>Détacher</button>
+          </div>
+          <label class="attach-select">
+            <span>ou choisir dans la liste</span>
+            <select id="f-parent"></select>
+          </label>
+        </div>
+
+        <!-- Point : lignes et zones qui lui sont rattachées -->
+        <div class="field" id="children-field" hidden>
+          <span>Lignes et zones rattachées</span>
+          <ul class="children-list" id="children-list"></ul>
+        </div>
 
         <label class="field">
           <span>Nom</span>
@@ -330,12 +356,12 @@
   <noscript><p class="noscript">Cet outil requiert JavaScript.</p></noscript>
 
   <script src="vendor/leaflet-1.9.4/leaflet.js" defer></script>
-  <script src="js/csv.js?v=2026-11-05-2" defer></script>
-  <script src="js/sanitize.js?v=2026-11-05-2" defer></script>
-  <script src="js/icons.js?v=2026-11-05-2" defer></script>
-  <script src="js/model.js?v=2026-11-05-2" defer></script>
-  <script src="js/store.js?v=2026-11-05-2" defer></script>
-  <script src="js/export-html.js?v=2026-11-05-2" defer></script>
-  <script src="js/app.js?v=2026-11-05-2" defer></script>
+  <script src="js/csv.js?v=2026-11-05-5" defer></script>
+  <script src="js/sanitize.js?v=2026-11-05-5" defer></script>
+  <script src="js/icons.js?v=2026-11-05-5" defer></script>
+  <script src="js/model.js?v=2026-11-05-5" defer></script>
+  <script src="js/store.js?v=2026-11-05-5" defer></script>
+  <script src="js/export-html.js?v=2026-11-05-5" defer></script>
+  <script src="js/app.js?v=2026-11-05-5" defer></script>
 </body>
 </html>

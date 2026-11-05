@@ -12,8 +12,9 @@ Projet personnel de [Gabriel Fortin](https://gabfortin.com). Ce n'est pas un ser
 |---|---|
 | Importer | CSV (virgule, point-virgule ou tabulation ; UTF-8 ou Windows-1252), page HTML exportée par l'outil, fichier de projet `.json`. Bouton « Importer » ou glisser-déposer sur la page. |
 | Rapport d'import | Nombre de lignes lues, de points, de lignes, de lieux sans position ou à plus de 100 km des autres, colonnes reconnues. Rien n'est supprimé ni corrigé automatiquement. |
-| Modifier | Nom, catégories, adresse, description (mise en forme simple, ou code HTML d'origine), lien, autres colonnes du fichier. Glisser un point, glisser les sommets d'une ligne, clic droit sur un sommet pour le retirer, prolonger une ligne. |
-| Ajouter | Points et lignes, en cliquant sur la carte. |
+| Modifier | Nom, catégories, adresse, description (mise en forme simple, ou code HTML d'origine), lien, autres colonnes du fichier. Glisser un point, glisser les sommets d'une ligne ou d'une zone, clic droit sur un sommet pour le retirer, prolonger une ligne ou ajouter des sommets à une zone. La fiche d'une zone donne sa superficie approximative. |
+| Ajouter | Points, lignes et zones (polygones), en cliquant sur la carte (boutons « Point », « Ligne », « Zone »). Une zone se ferme par double-clic, Entrée ou « Fermer la zone » (3 sommets au moins). Pendant le tracé, un pointillé relie le dernier sommet au curseur (et, pour une zone, revient au premier sommet), avec la longueur totale ou la superficie qu'on obtiendrait en cliquant, comme l'outil Mesurer de Google Maps. Retour arrière retire le dernier sommet. |
+| Rattacher une ligne ou une zone à un point | Après le tracé (bouton « Rattacher à un point » du message) ou dans sa fiche : cliquer sur un point de la carte, ou le choisir dans la liste. Le tracé prend la couleur et l'icône du point ; sur la carte publiée, il ouvre la fiche du point, suit ses filtres et n'est pas listé à part. « Détacher » défait le lien. |
 | Annuler | Bouton « Annuler » ou Ctrl+Z (60 étapes). |
 | Style | Couleur et icône par catégorie (« Réglages de la carte »), parmi 72 pictogrammes. Un lieu prend celles de sa première catégorie et s'affiche en disque de couleur avec une icône blanche, comme dans Mapme. Une couleur et une icône sont proposées d'office selon le nom de la catégorie (ex. « Espaces verts » → arbres, vert). Enregistré dans le projet et la page exportée, jamais dans le CSV. |
 | Enregistrer | Automatique, dans le navigateur (IndexedDB). « Mes cartes » liste les cartes enregistrées sur cet appareil. |
@@ -32,7 +33,8 @@ Une ligne par lieu. Les colonnes sont reconnues par leur nom (sans tenir compte 
 | Adresse | `address`, `adresse` | Une adresse qui ne contient que des coordonnées n'est pas affichée (cas Mapme) |
 | Position | `latitude`/`lat`, `longitude`/`lng`/`lon` | Point décimal ou virgule |
 | Lien | `actionText`, `actionUrl` (ou `lien`, `url`) | Bouton dans la fenêtre du lieu |
-| Ligne (tracé) | `geometry`, `wkt`, `geom` | WKT `LINESTRING (lng lat, lng lat, …)` ; GeoJSON accepté à l'import |
+| Ligne ou zone (tracé) | `geometry`, `wkt`, `geom` | WKT `LINESTRING (lng lat, lng lat, …)` pour une ligne, `POLYGON ((lng lat, …, premier sommet répété))` pour une zone (anneau extérieur seulement) ; GeoJSON `LineString` / `Polygon` accepté à l'import |
+| Point de rattachement d'une ligne ou d'une zone | `parentId`, `parent`, `lieuParent` | Identifiant (colonne Identifiant) du point auquel le tracé appartient. Colonne ajoutée en fin de tableau au premier rattachement. |
 
 **Ce que l'export CSV de Mapme ne contient pas** : l'icône et la couleur des catégories, le fond de carte, et les formes dessinées dans Mapme (lignes, zones). Vérifié sur l'export « Réalisations » (361 lignes, que des points). Les icônes et couleurs se refont dans « Réglages de la carte » ; les lignes se tracent dans l'éditeur.
 

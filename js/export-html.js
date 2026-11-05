@@ -49,7 +49,8 @@
     return loadParts().then(function (p) {
       var title = S.escape(project.title || 'Carte');
       var about = (project.about || '').trim();
-      var count = project.features.filter(function (f) { return root.Model.hasPosition(project, f); }).length;
+      // Lieux comptés : une ligne rattachée à un point fait partie de ce lieu
+      var count = project.features.filter(function (f) { return root.Model.hasPosition(project, f) && !root.Model.getParent(project, f); }).length;
       var accent = /^#[0-9a-f]{6}$/i.test(project.settings.accent) ? project.settings.accent : '#0f766e';
       var updated = new Date(project.updatedAt || Date.now()).toLocaleDateString('fr-CA', { year: 'numeric', month: 'long', day: 'numeric' });
       var description = S.escape(about ? about.slice(0, 200) : 'Carte interactive : ' + (project.title || ''));

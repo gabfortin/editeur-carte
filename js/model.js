@@ -3,7 +3,7 @@
    (toutes les colonnes, valeurs en texte, même ordre). L'éditeur ne réécrit une valeur que si
    on la modifie (ex. latitude/longitude après un déplacement). L'export CSV redonne donc le
    fichier de départ, plus les modifications.
-   Les lignes (tracés) sont stockées en WKT dans une colonne « geometry ». */
+   Les lignes et les zones sont stockées en WKT dans une colonne « geometry » (LINESTRING, POLYGON). */
 (function (root) {
   'use strict';
 
@@ -21,7 +21,8 @@
     lng: ['longitude', 'lng', 'lon', 'long'],
     actionText: ['actiontext', 'textedulien', 'lientexte'],
     actionUrl: ['actionurl', 'lien', 'url', 'link'],
-    geometry: ['geometry', 'geometrie', 'wkt', 'geom']
+    geometry: ['geometry', 'geometrie', 'wkt', 'geom'],
+    parent: ['parentid', 'parent', 'lieuparent', 'rattachea']
   };
 
   // Colonnes d'une carte créée de zéro : celles de Mapme, pour rester compatible
@@ -157,7 +158,7 @@
   function set(p, f, role, value) {
     var col = p.roles[role];
     if (!col) {
-      col = role === 'geometry' ? 'geometry' : role === 'lat' ? 'latitude' : role === 'lng' ? 'longitude' : role;
+      col = { geometry: 'geometry', lat: 'latitude', lng: 'longitude', parent: 'parentId' }[role] || role;
       while (p.columns.indexOf(col) !== -1 && p.roles[role] !== col) col += '_';
       p.columns.push(col);
       p.roles[role] = col;
@@ -175,33 +176,79 @@
   function fmt(n) { return String(Math.round(n * 1e7) / 1e7); }
 
   // ── Géométrie ──
-  function parseWkt(s) {
+  // Colonne geometry, en WKT : LINESTRING pour une ligne, POLYGON (un seul anneau, sans trou)
+  // pour une zone. GeoJSON LineString / Polygon accepté à l'import. En mémoire, le contour d'une
+  // zone est gardé SANS répéter le premier sommet à la fin (Leaflet le ferme lui-même) ; le WKT,
+  // lui, le répète comme l'exige le format.
+  function wktPoints(body) {
+    return body.split(',').map(function (pair) {
+      var xy = pair.trim().split(/\s+/).map(Number);
+      return [xy[1], xy[0]]; // WKT : longitude latitude
+    }).filter(function (ll) { return isFinite(ll[0]) && isFinite(ll[1]); });
+  }
+
+  function openRing(pts) {
+    var a = pts[0], z = pts[pts.length - 1];
+    return pts.length > 1 && a[0] === z[0] && a[1] === z[1] ? pts.slice(0, -1) : pts;
+  }
+
+  // → { type: 'line' | 'area', path: [[lat, lng], …] } ou null
+  function parseGeometry(s) {
     s = String(s || '').trim();
     if (!s) return null;
-    var m = /^LINESTRING\s*\(([^)]*)\)$/i.exec(s);
+    var m = /^LINESTRING\s*\(([^()]*)\)$/i.exec(s);
     if (m) {
-      var pts = m[1].split(',').map(function (pair) {
-        var xy = pair.trim().split(/\s+/).map(Number);
-        return [xy[1], xy[0]]; // WKT : longitude latitude
-      }).filter(function (ll) { return isFinite(ll[0]) && isFinite(ll[1]); });
-      return pts.length >= 2 ? pts : null;
+      var pts = wktPoints(m[1]);
+      return pts.length >= 2 ? { type: 'line', path: pts } : null;
     }
-    if (s[0] === '{') { // GeoJSON accepté à l'import
+    m = /^POLYGON\s*\(\s*\(([^()]*)\)/i.exec(s); // anneau extérieur ; les trous éventuels sont ignorés
+    if (m) {
+      var ring = openRing(wktPoints(m[1]));
+      return ring.length >= 3 ? { type: 'area', path: ring } : null;
+    }
+    if (s[0] === '{') {
       try {
         var g = JSON.parse(s);
         if (g.type === 'Feature') g = g.geometry;
-        if (g && g.type === 'LineString') return g.coordinates.map(function (c) { return [c[1], c[0]]; });
+        var ll = function (c) { return [c[1], c[0]]; };
+        if (g && g.type === 'LineString' && g.coordinates.length >= 2) return { type: 'line', path: g.coordinates.map(ll) };
+        if (g && g.type === 'Polygon' && g.coordinates[0]) {
+          var r = openRing(g.coordinates[0].map(ll));
+          if (r.length >= 3) return { type: 'area', path: r };
+        }
       } catch (e) { /* ignoré */ }
     }
     return null;
   }
 
-  function toWkt(path) {
-    return 'LINESTRING (' + path.map(function (ll) { return fmt(ll[1]) + ' ' + fmt(ll[0]); }).join(', ') + ')';
+  // Compatibilité : chemin seul (ligne ou contour de zone)
+  function parseWkt(s) { var g = parseGeometry(s); return g ? g.path : null; }
+
+  function toWkt(path, type) {
+    var pts = path.map(function (ll) { return fmt(ll[1]) + ' ' + fmt(ll[0]); });
+    if (type === 'area') return 'POLYGON ((' + pts.concat(pts[0]).join(', ') + '))';
+    return 'LINESTRING (' + pts.join(', ') + ')';
   }
 
+  // 'point', 'line' ou 'area' (zone)
   function kind(p, f) {
-    return parseWkt(get(p, f, 'geometry')) ? 'line' : 'point';
+    var g = parseGeometry(get(p, f, 'geometry'));
+    return g ? g.type : 'point';
+  }
+
+  // Ligne ou zone : a un tracé dans geometry
+  function isShape(p, f) { return kind(p, f) !== 'point'; }
+
+  // Superficie approximative d'une zone, en m² (projection locale, suffisant à l'échelle d'une ville)
+  function areaM2(path) {
+    if (!path || path.length < 3) return 0;
+    var R = 6371000, toRad = Math.PI / 180, lat0 = path[0][0] * toRad, sum = 0;
+    var xy = path.map(function (ll) { return [ll[1] * toRad * R * Math.cos(lat0), ll[0] * toRad * R]; });
+    for (var i = 0; i < xy.length; i++) {
+      var a = xy[i], b = xy[(i + 1) % xy.length];
+      sum += a[0] * b[1] - b[0] * a[1];
+    }
+    return Math.abs(sum) / 2;
   }
 
   function getLatLng(p, f) {
@@ -216,10 +263,11 @@
   }
 
   function getPath(p, f) { return parseWkt(get(p, f, 'geometry')); }
-  function setPath(p, f, path) { set(p, f, 'geometry', toWkt(path)); }
+  // Garde le type existant (ligne ou zone) sauf si `type` est donné
+  function setPath(p, f, path, type) { set(p, f, 'geometry', toWkt(path, type || kind(p, f))); }
 
   function hasPosition(p, f) {
-    return kind(p, f) === 'line' || !!getLatLng(p, f);
+    return isShape(p, f) || !!getLatLng(p, f);
   }
 
   // Adresse à afficher : Mapme met parfois des coordonnées (« -73.5737,45.50951 ») dans la
@@ -228,6 +276,41 @@
   function displayAddress(p, f) {
     var a = get(p, f, 'address').trim();
     return COORDS_RE.test(a) ? '' : a;
+  }
+
+  // ── Ligne ou zone rattachée à un point ──
+  // Une ligne ou une zone peut appartenir à un point existant (ex. le tracé d'un projet dont le point porte
+  // la fiche). Lien stocké dans la colonne « parentId » de la ligne (créée en fin de tableau
+  // au premier rattachement) : l'identifiant du point (colonne id, ex. mapmeId de Mapme).
+  // La ligne garde sa propre rangée ; elle prend la couleur et l'icône du point, et sur la
+  // carte publiée elle ouvre la fiche du point.
+  function idOf(p, f) { return get(p, f, 'id').trim(); }
+
+  function findById(p, id) {
+    if (!id) return null;
+    for (var i = 0; i < p.features.length; i++) if (idOf(p, p.features[i]) === id) return p.features[i];
+    return null;
+  }
+
+  // Point auquel la ligne est rattachée, ou null (pas de lien, ou point supprimé)
+  function getParent(p, f) {
+    if (!p.roles.parent) return null;
+    var g = findById(p, get(p, f, 'parent').trim());
+    return g && g !== f && kind(p, g) === 'point' ? g : null;
+  }
+
+  // Rattache la ligne f au point g (ou détache si g est null). Un point sans identifiant en
+  // reçoit un (UUID), sinon le lien serait impossible ; c'est la seule écriture sur le point.
+  function setParent(p, f, g) {
+    if (!g) { if (p.roles.parent) set(p, f, 'parent', ''); return; }
+    if (!idOf(p, g)) set(p, g, 'id', uid());
+    set(p, f, 'parent', idOf(p, g));
+  }
+
+  function childrenOf(p, g) {
+    var id = idOf(p, g);
+    if (!id || !p.roles.parent) return [];
+    return p.features.filter(function (f) { return f !== g && get(p, f, 'parent').trim() === id && isShape(p, f); });
   }
 
   // ── Catégories ──
@@ -262,12 +345,14 @@
 
   // Icône d'un lieu : celle de sa première catégorie
   function iconOf(p, f) {
+    f = getParent(p, f) || f;
     var cats = getCategories(p, f);
     return (cats.length && (p.settings.categoryIcons || {})[cats[0]]) || DEFAULT_ICON;
   }
 
   function colorOf(p, f) {
     if (!p.settings.colorByCategory) return p.settings.accent;
+    f = getParent(p, f) || f; // une ligne rattachée prend la couleur de son point
     var cats = getCategories(p, f);
     return (cats.length && p.settings.categoryColors[cats[0]]) || p.settings.accent;
   }
@@ -292,14 +377,14 @@
   function analyse(p) {
     var pts = [];
     p.features.forEach(function (f) {
-      var ll = kind(p, f) === 'line' ? getPath(p, f)[0] : getLatLng(p, f);
+      var ll = isShape(p, f) ? getPath(p, f)[0] : getLatLng(p, f);
       if (ll) pts.push(ll);
     });
     var centre = pts.length ? [median(pts.map(function (x) { return x[0]; })), median(pts.map(function (x) { return x[1]; }))] : null;
     var issues = new Map(); // uid → 'sans-position' | 'loin' | 'sans-nom'
     p.features.forEach(function (f) {
       var k = kind(p, f);
-      var ll = k === 'line' ? getPath(p, f)[0] : getLatLng(p, f);
+      var ll = k !== 'point' ? getPath(p, f)[0] : getLatLng(p, f);
       if (!ll) issues.set(f.uid, 'sans-position');
       else if (centre && distanceKm(centre, ll) > FAR_KM) issues.set(f.uid, 'loin');
       else if (!get(p, f, 'name').trim()) issues.set(f.uid, 'sans-nom');
@@ -311,7 +396,7 @@
     var f = { uid: uid(), row: {} };
     p.columns.forEach(function (c) { f.row[c] = ''; });
     if (p.roles.id) f.row[p.roles.id] = uid();
-    if (kindName === 'line') setPath(p, f, geom);
+    if (kindName === 'line' || kindName === 'area') setPath(p, f, geom, kindName);
     else setLatLng(p, f, geom);
     return f;
   }
@@ -343,9 +428,9 @@
     emptyProject: emptyProject, projectFromCsv: projectFromCsv, revive: revive,
     detectRoles: detectRoles, get: get, set: set, kind: kind,
     getLatLng: getLatLng, setLatLng: setLatLng, getPath: getPath, setPath: setPath,
-    hasPosition: hasPosition, parseWkt: parseWkt, toWkt: toWkt,
+    hasPosition: hasPosition, parseWkt: parseWkt, parseGeometry: parseGeometry, toWkt: toWkt, isShape: isShape, areaM2: areaM2,
     getCategories: getCategories, displayAddress: displayAddress, setCategories: setCategories, categoryStats: categoryStats,
     assignColors: assignColors, colorOf: colorOf, iconOf: iconOf, defaultStyle: defaultStyle, DEFAULT_ICON: DEFAULT_ICON, analyse: analyse, distanceKm: distanceKm,
-    newFeature: newFeature, toCsv: toCsv, uid: uid
+    newFeature: newFeature, getParent: getParent, setParent: setParent, childrenOf: childrenOf, idOf: idOf, toCsv: toCsv, uid: uid
   };
 })(typeof window !== 'undefined' ? window : this);
