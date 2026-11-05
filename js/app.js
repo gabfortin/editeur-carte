@@ -834,7 +834,7 @@
     var p = M.emptyProject('Nouvelle carte');
     openProject(p, { fresh: true });
     closeDialogs();
-    openSettings();
+    openSettings({ creating: true });
     $('#s-title').select();
   }
 
@@ -882,8 +882,15 @@
   });
 
   // ── Réglages ──
-  function openSettings() {
+  // opts.creating : ouverte juste après « Nouvelle carte » (bouton « Créer la carte »)
+  function openSettings(opts) {
     if (!project) return;
+    opts = (opts && opts.creating !== undefined) ? opts : {};
+    $('#s-done').textContent = opts.creating ? 'Créer la carte' : 'Terminé';
+    $('#s-foot-note').textContent = opts.creating
+      ? 'Vous pourrez changer ces réglages plus tard (« Réglages de la carte »).'
+      : 'Les modifications sont enregistrées automatiquement.';
+    settingsCreating = !!opts.creating;
     $('#s-title').value = project.title;
     $('#s-about').value = project.about || '';
     $('#s-accent').value = project.settings.accent;
@@ -895,7 +902,8 @@
         '<input type="color" data-cat-color="' + e + '" value="' + S.escape(project.settings.categoryColors[c] || '#888888') + '" aria-label="Couleur de « ' + e + ' »">' +
         iconButton(c) +
         '<span class="name" title="' + e + '">' + e + '</span><span class="n">' + stats.get(c) + '</span></li>';
-    }).join('') : '<li class="dlg-note">Aucune catégorie.</li>';
+    }).join('') : '';
+    $('#cat-section').hidden = !stats.size; // carte vide : rien à régler pour l'instant
     $('#dlg-settings').showModal();
   }
 
@@ -977,7 +985,16 @@
     btns[Math.max(0, Math.min(btns.length - 1, next))].focus();
   });
 
+  var settingsCreating = false;
   var dlgSettings = $('#dlg-settings');
+  // Fermeture après « Créer la carte » (bouton, ✕ ou Échap) : on invite à ajouter un premier lieu
+  dlgSettings.addEventListener('close', function () {
+    if (!settingsCreating || !project) return;
+    settingsCreating = false;
+    toast('Carte « ' + project.title + ' » créée. Ajoutez un point, une ligne ou une zone.', { tone: 'success' });
+    var first = $('#btn-add-point');
+    if (first && desktopMQ.matches) first.focus();
+  });
   dlgSettings.addEventListener('focusin', function (e) { if (e.target.matches('input, textarea')) beginField(); });
   dlgSettings.addEventListener('input', function (e) {
     if (!project) return;

@@ -7,7 +7,7 @@
   <meta name="description" content="Importer un fichier CSV de lieux, placer et modifier des points et des lignes, puis publier la carte en une page HTML à intégrer dans un autre site. Tout reste dans le navigateur.">
   <meta name="author" content="Gabriel Fortin">
   <link rel="author" href="https://gabfortin.com">
-  <meta name="app-version" content="2026-11-05-5">
+  <meta name="app-version" content="2026-11-05-6">
   <meta name="theme-color" content="#eef1ea" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0b1310" media="(prefers-color-scheme: dark)">
   <link rel="icon" type="image/svg+xml" href="img/icon.svg">
@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://tile.openstreetmap.org">
   <link rel="preload" href="fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="vendor/leaflet-1.9.4/leaflet.css">
-  <link rel="stylesheet" href="css/style.css?v=2026-11-05-5">
+  <link rel="stylesheet" href="css/style.css?v=2026-11-05-6">
 </head>
 <body>
   <a class="skip-link" href="#map">Passer à la carte</a>
@@ -268,9 +268,16 @@
         <span>Colorer les lieux selon leur première catégorie</span>
       </label>
     </div>
-    <h3 class="dlg-sub">Couleur et icône des catégories</h3>
-    <p class="dlg-note">Un lieu prend la couleur et l'icône de sa première catégorie. Ces choix sont enregistrés avec la carte (projet et page HTML), pas dans le CSV.</p>
-    <ul class="cat-colors" id="cat-colors"></ul>
+    <div id="cat-section">
+      <h3 class="dlg-sub">Couleur et icône des catégories</h3>
+      <p class="dlg-note">Un lieu prend la couleur et l'icône de sa première catégorie. Ces choix sont enregistrés avec la carte (projet et page HTML), pas dans le CSV.</p>
+      <ul class="cat-colors" id="cat-colors"></ul>
+    </div>
+    <!-- Les réglages s'enregistrent à chaque modification : ce bouton ne fait que fermer. -->
+    <form method="dialog" class="dlg-foot">
+      <p class="dlg-foot-note" id="s-foot-note">Les modifications sont enregistrées automatiquement.</p>
+      <button type="submit" class="gf-btn" id="s-done">Terminé</button>
+    </form>
   </dialog>
 
   <!-- Exporter -->
@@ -356,12 +363,12 @@
   <noscript><p class="noscript">Cet outil requiert JavaScript.</p></noscript>
 
   <script src="vendor/leaflet-1.9.4/leaflet.js" defer></script>
-  <script src="js/csv.js?v=2026-11-05-5" defer></script>
-  <script src="js/sanitize.js?v=2026-11-05-5" defer></script>
-  <script src="js/icons.js?v=2026-11-05-5" defer></script>
-  <script src="js/model.js?v=2026-11-05-5" defer></script>
-  <script src="js/store.js?v=2026-11-05-5" defer></script>
-  <script src="js/export-html.js?v=2026-11-05-5" defer></script>
-  <script src="js/app.js?v=2026-11-05-5" defer></script>
+  <script src="js/csv.js?v=2026-11-05-6" defer></script>
+  <script src="js/sanitize.js?v=2026-11-05-6" defer></script>
+  <script src="js/icons.js?v=2026-11-05-6" defer></script>
+  <script src="js/model.js?v=2026-11-05-6" defer></script>
+  <script src="js/store.js?v=2026-11-05-6" defer></script>
+  <script src="js/export-html.js?v=2026-11-05-6" defer></script>
+  <script src="js/app.js?v=2026-11-05-6" defer></script>
 </body>
 </html>

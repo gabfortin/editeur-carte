@@ -253,6 +253,14 @@ body.placing #map, body.placing .leaflet-interactive { cursor: crosshair !import
 .gf-dialog .gf-info-close { position: absolute; }
 .dlg-note { font-size: .82rem; line-height: 1.55; color: var(--ink-700); margin-bottom: 14px; }
 .dlg-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }
+/* Pied de fenêtre collé en bas, visible même quand la liste des catégories est longue */
+.dlg-foot {
+  position: sticky; bottom: -24px; z-index: 2; margin: 18px -26px -24px; padding: 12px 26px 16px;
+  display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap;
+  background: var(--glass-strong); border-top: 1px solid var(--hairline);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+.dlg-foot-note { flex: 1; min-width: 160px; margin: 0; font-size: .74rem; color: var(--ink-500); }
 .dlg-sub { margin: 18px 0 8px; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-500); }
 
 .maps-list { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
