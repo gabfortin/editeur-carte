@@ -2,6 +2,8 @@
 
 Outil pour monter une carte de lieux à partir d'un fichier CSV (par exemple un export Mapme), la corriger, puis la publier en une page HTML autonome à intégrer dans un autre site. Tout se passe dans le navigateur : aucun serveur, aucune donnée envoyée.
 
+**En ligne :** [mapedit.gabfortin.com](https://mapedit.gabfortin.com)
+
 Projet personnel de [Gabriel Fortin](https://gabfortin.com). Ce n'est pas un service de la Ville de Montréal ni d'un arrondissement.
 
 ## Ce que fait l'outil
