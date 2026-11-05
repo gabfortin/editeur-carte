@@ -13,6 +13,7 @@
     viewerCss: 'viewer/viewer.css',
     viewerJs: 'viewer/viewer.js',
     sanitizeJs: 'js/sanitize.js',
+    iconsJs: 'js/icons.js',
     modelJs: 'js/model.js'
   };
   var cache = null;
@@ -97,6 +98,7 @@
         '<script type="application/json" id="editeur-carte-projet">' + inlineJson(project) + '</script>\n' +
         '<script>\n' + inlineJs(p.leafletJs) + '\n</script>\n' +
         '<script>\n' + inlineJs(p.sanitizeJs) + '\n</script>\n' +
+        '<script>\n' + inlineJs(p.iconsJs) + '\n</script>\n' +
         '<script>\n' + inlineJs(p.modelJs) + '\n</script>\n' +
         '<script>\n' + inlineJs(p.viewerJs) + '\n</script>\n' +
         '</body>\n</html>\n';

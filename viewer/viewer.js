@@ -26,10 +26,15 @@
   var layers = new Map();
   feats.forEach(function (f) {
     var c = M.colorOf(project, f);
+    // Point : disque de la couleur de la catégorie avec son icône blanche (js/icons.js)
     var layer = M.kind(project, f) === 'line'
-      ? L.polyline(M.getPath(project, f), { color: c, weight: 5, opacity: .9, renderer: renderer })
-      : L.circleMarker(M.getLatLng(project, f), {
-        radius: 7, color: '#fff', weight: 2, fillColor: c, fillOpacity: 1, renderer: renderer
+      ? L.polyline(M.getPath(project, f), { color: c, weight: 6, opacity: .9, lineCap: 'round', renderer: renderer })
+      : L.marker(M.getLatLng(project, f), {
+        icon: L.divIcon({
+          className: 'vw-pin', iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -12],
+          html: '<span class="vw-disc" style="--c:' + S.escape(c) + '">' + Icons.svg(M.iconOf(project, f)) + '</span>'
+        }),
+        keyboard: false, riseOnHover: true
       });
     layer.bindPopup(function () { return popupHtml(f); }, { maxWidth: 320, autoPanPaddingTopLeft: [24, 90], autoPanPaddingBottomRight: [24, 24] });
     layer.on('click', function () { select(f.uid, false); });
@@ -72,7 +77,8 @@
     var html = '<button type="button" class="chip" data-cat="" aria-pressed="true">Toutes <span class="n">' + feats.length + '</span></button>';
     Array.from(stats.keys()).sort(function (a, b) { return a.localeCompare(b, 'fr'); }).forEach(function (c) {
       html += '<button type="button" class="chip" data-cat="' + S.escape(c) + '" aria-pressed="false">' +
-        '<i class="dot" style="--c:' + S.escape(project.settings.categoryColors[c] || project.settings.accent) + '" aria-hidden="true"></i>' +
+        '<i class="dot dot-icon" style="--c:' + S.escape(project.settings.categoryColors[c] || project.settings.accent) + '" aria-hidden="true">' +
+        Icons.svg((project.settings.categoryIcons || {})[c]) + '</i>' +
         '<span class="chip-label">' + S.escape(c) + '</span> <span class="n">' + stats.get(c) + '</span></button>';
     });
     chips.innerHTML = html;

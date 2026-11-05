@@ -159,8 +159,8 @@
     var issue = analysis.issues.get(f.uid);
     return L.divIcon({
       className: 'ed-marker' + (issue === 'loin' ? ' issue' : '') + (selected ? ' selected' : ''),
-      html: '<span class="ed-dot" style="--c:' + S.escape(M.colorOf(project, f)) + '"></span>',
-      iconSize: [16, 16], iconAnchor: [8, 8]
+      html: '<span class="ed-dot" style="--c:' + S.escape(M.colorOf(project, f)) + '">' + Icons.svg(M.iconOf(project, f)) + '</span>',
+      iconSize: [26, 26], iconAnchor: [13, 13]
     });
   }
 
@@ -189,7 +189,7 @@
         fillPosition(f);
       });
     }
-    layer.bindTooltip(S.escape(name(f) || 'Sans nom'), { className: 'ed-tooltip', direction: 'top', offset: [0, -8] });
+    layer.bindTooltip(S.escape(name(f) || 'Sans nom'), { className: 'ed-tooltip', direction: 'top', offset: [0, -13] });
     layer.on('click', function (e) {
       // Pendant un ajout ou un tracé, un clic sur un lieu existant compte comme un clic sur la carte
       if (mode) { map.fire('click', { latlng: e.latlng }); return; }
@@ -762,11 +762,92 @@
     $('#s-bycat').checked = !!project.settings.colorByCategory;
     var stats = M.categoryStats(project);
     $('#cat-colors').innerHTML = stats.size ? Array.from(stats.keys()).sort(function (a, b) { return a.localeCompare(b, 'fr'); }).map(function (c) {
-      return '<li><label><input type="color" data-cat-color="' + S.escape(c) + '" value="' + S.escape(project.settings.categoryColors[c] || '#888888') + '">' +
-        '<span class="name">' + S.escape(c) + '</span><span class="n">' + stats.get(c) + '</span></label></li>';
+      var e = S.escape(c);
+      return '<li data-cat="' + e + '">' +
+        '<input type="color" data-cat-color="' + e + '" value="' + S.escape(project.settings.categoryColors[c] || '#888888') + '" aria-label="Couleur de « ' + e + ' »">' +
+        iconButton(c) +
+        '<span class="name" title="' + e + '">' + e + '</span><span class="n">' + stats.get(c) + '</span></li>';
     }).join('') : '<li class="dlg-note">Aucune catégorie.</li>';
     $('#dlg-settings').showModal();
   }
+
+  // ── Icône d'une catégorie : bouton qui ouvre la grille des icônes (js/icons.js) ──
+  function iconLabel(id) {
+    var e = Icons.list.find(function (x) { return x.id === id; });
+    return e ? e.label : 'Repère';
+  }
+
+  function iconButton(c) {
+    var id = (project.settings.categoryIcons || {})[c] || M.DEFAULT_ICON;
+    return '<button type="button" class="cat-icon-btn" data-icon-toggle aria-expanded="false" ' +
+      'aria-label="Icône de « ' + S.escape(c) + ' » : ' + S.escape(iconLabel(id)) + '. Changer" ' +
+      'style="--c:' + S.escape(project.settings.categoryColors[c] || project.settings.accent) + '">' + Icons.svg(id) + '</button>';
+  }
+
+  function closeIconGrids() {
+    $('#cat-colors').querySelectorAll('li.open').forEach(function (li) {
+      li.classList.remove('open');
+      var g = li.querySelector('.icon-grid'); if (g) g.remove();
+      li.querySelector('[data-icon-toggle]').setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  function openIconGrid(li) {
+    var c = li.dataset.cat;
+    var current = (project.settings.categoryIcons || {})[c] || M.DEFAULT_ICON;
+    var grid = document.createElement('div');
+    grid.className = 'icon-grid';
+    grid.setAttribute('role', 'group');
+    grid.setAttribute('aria-label', 'Icône de « ' + c + ' »');
+    grid.innerHTML = Icons.list.map(function (x) {
+      return '<button type="button" data-icon="' + x.id + '" aria-pressed="' + (x.id === current) + '" title="' + S.escape(x.label) + '" aria-label="' + S.escape(x.label) + '">' +
+        Icons.svg(x.id, 'currentColor') + '</button>';
+    }).join('');
+    li.appendChild(grid);
+    li.classList.add('open');
+    li.querySelector('[data-icon-toggle]').setAttribute('aria-expanded', 'true');
+    (grid.querySelector('[aria-pressed="true"]') || grid.querySelector('button')).focus();
+  }
+
+  $('#cat-colors').addEventListener('click', function (e) {
+    if (!project) return;
+    var li = e.target.closest('li[data-cat]');
+    if (!li) return;
+    if (e.target.closest('[data-icon-toggle]')) {
+      var wasOpen = li.classList.contains('open');
+      closeIconGrids();
+      if (!wasOpen) openIconGrid(li);
+      return;
+    }
+    var pick = e.target.closest('[data-icon]');
+    if (pick) {
+      var c = li.dataset.cat, id = pick.dataset.icon;
+      mutate(function () { project.settings.categoryIcons[c] = id; }, { layers: true });
+      closeIconGrids();
+      li.querySelector('[data-icon-toggle]').outerHTML = iconButton(c);
+      li.querySelector('[data-icon-toggle]').focus();
+    }
+  });
+
+  $('#cat-colors').addEventListener('keydown', function (e) {
+    var li = e.target.closest('li.open');
+    if (!li) return;
+    if (e.key === 'Escape') {
+      e.preventDefault(); e.stopPropagation(); // ne pas fermer la fenêtre Réglages
+      closeIconGrids();
+      li.querySelector('[data-icon-toggle]').focus();
+      return;
+    }
+    // Flèches dans la grille
+    var btns = Array.from(li.querySelectorAll('.icon-grid button'));
+    var i = btns.indexOf(e.target);
+    if (i === -1) return;
+    var perRow = Math.max(1, Math.round(li.querySelector('.icon-grid').clientWidth / btns[0].offsetWidth));
+    var next = { ArrowRight: i + 1, ArrowLeft: i - 1, ArrowDown: i + perRow, ArrowUp: i - perRow }[e.key];
+    if (next === undefined) return;
+    e.preventDefault();
+    btns[Math.max(0, Math.min(btns.length - 1, next))].focus();
+  });
 
   var dlgSettings = $('#dlg-settings');
   dlgSettings.addEventListener('focusin', function (e) { if (e.target.matches('input, textarea')) beginField(); });
@@ -781,7 +862,11 @@
     var t = e.target;
     if (t.id === 's-accent') { mutate(function () { project.settings.accent = t.value; }, { layers: true }); }
     else if (t.id === 's-bycat') { mutate(function () { project.settings.colorByCategory = t.checked; }, { layers: true }); }
-    else if (t.dataset.catColor) { mutate(function () { project.settings.categoryColors[t.dataset.catColor] = t.value; }, { layers: true }); }
+    else if (t.dataset.catColor) {
+      mutate(function () { project.settings.categoryColors[t.dataset.catColor] = t.value; }, { layers: true });
+      var ib = t.parentNode.querySelector('[data-icon-toggle]');
+      if (ib) ib.style.setProperty('--c', t.value);
+    }
   });
 
   // ── Exporter ──

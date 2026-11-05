@@ -15,6 +15,7 @@ Projet personnel de [Gabriel Fortin](https://gabfortin.com). Ce n'est pas un ser
 | Modifier | Nom, catégories, adresse, description (mise en forme simple, ou code HTML d'origine), lien, autres colonnes du fichier. Glisser un point, glisser les sommets d'une ligne, clic droit sur un sommet pour le retirer, prolonger une ligne. |
 | Ajouter | Points et lignes, en cliquant sur la carte. |
 | Annuler | Bouton « Annuler » ou Ctrl+Z (60 étapes). |
+| Style | Couleur et icône par catégorie (« Réglages de la carte »), parmi 72 pictogrammes. Un lieu prend celles de sa première catégorie et s'affiche en disque de couleur avec une icône blanche, comme dans Mapme. Une couleur et une icône sont proposées d'office selon le nom de la catégorie (ex. « Espaces verts » → arbres, vert). Enregistré dans le projet et la page exportée, jamais dans le CSV. |
 | Enregistrer | Automatique, dans le navigateur (IndexedDB). « Mes cartes » liste les cartes enregistrées sur cet appareil. |
 | Exporter | **Page HTML** autonome (carte, données, Leaflet et code intégrés) + code d'`iframe` ; **CSV** (mêmes colonnes et même ordre que le fichier importé) ; **projet** `.json`. |
 
@@ -33,6 +34,8 @@ Une ligne par lieu. Les colonnes sont reconnues par leur nom (sans tenir compte 
 | Lien | `actionText`, `actionUrl` (ou `lien`, `url`) | Bouton dans la fenêtre du lieu |
 | Ligne (tracé) | `geometry`, `wkt`, `geom` | WKT `LINESTRING (lng lat, lng lat, …)` ; GeoJSON accepté à l'import |
 
+**Ce que l'export CSV de Mapme ne contient pas** : l'icône et la couleur des catégories, le fond de carte, et les formes dessinées dans Mapme (lignes, zones). Vérifié sur l'export « Réalisations » (361 lignes, que des points). Les icônes et couleurs se refont dans « Réglages de la carte » ; les lignes se tracent dans l'éditeur.
+
 Les autres colonnes (`pitch`, `zoom`, `bearing` de Mapme, etc.) sont gardées telles quelles et ressortent à l'export. Une carte créée de zéro utilise les colonnes de Mapme. La colonne `geometry` est ajoutée en fin de tableau au premier tracé de ligne.
 
 **Fidélité à la source** : le projet est la table du CSV. Une valeur n'est réécrite que si on la modifie (ex. latitude et longitude après un déplacement). Un CSV importé puis exporté sans modification est identique, octet pour octet (testé). Les descriptions HTML sont nettoyées **à l'affichage seulement** (voir `js/sanitize.js`) ; le texte d'origine reste dans les données tant qu'on ne le modifie pas dans l'éditeur visuel.
@@ -49,7 +52,7 @@ La page exportée contient le projet complet : on peut la rouvrir dans l'éditeu
 
 ## Stack
 
-HTML/CSS/JS vanilla, sans build. Leaflet 1.9.4 hébergé dans `vendor/` (il est aussi intégré tel quel dans les pages exportées). Polices Inter et Poppins dans `fonts/` (OFL). Système de design des cartes (`~/Developer/MAP-DESIGN-SYSTEM.md`), dialecte `gf-`, couleur sarcelle, mode sombre selon l'appareil.
+HTML/CSS/JS vanilla, sans build. Leaflet 1.9.4 hébergé dans `vendor/` (il est aussi intégré tel quel dans les pages exportées). Pictogrammes : 72 icônes de [Lucide](https://lucide.dev) 0.460.0 (licence ISC, `vendor/lucide-0.460.0/LICENSE`) copiées dans `js/icons.js`. Polices Inter et Poppins dans `fonts/` (OFL). Système de design des cartes (`~/Developer/MAP-DESIGN-SYSTEM.md`), dialecte `gf-`, couleur sarcelle, mode sombre selon l'appareil.
 
 | Fichier | Rôle |
 |---|---|
@@ -57,6 +60,7 @@ HTML/CSS/JS vanilla, sans build. Leaflet 1.9.4 hébergé dans `vendor/` (il est 
 | `js/csv.js` | Lecture et écriture CSV (RFC 4180, champs multilignes) |
 | `js/model.js` | Projet, rôles des colonnes, géométrie, catégories, lieux à vérifier. Partagé avec la carte exportée. |
 | `js/sanitize.js` | Nettoyage du HTML des descriptions. Partagé avec la carte exportée. |
+| `js/icons.js` | Pictogrammes des catégories (Lucide). Partagé avec la carte exportée. |
 | `js/store.js` | Enregistrement dans IndexedDB |
 | `js/export-html.js` | Construction de la page HTML autonome |
 | `viewer/viewer.css`, `viewer/viewer.js` | Carte publiée (intégrés dans la page exportée) |

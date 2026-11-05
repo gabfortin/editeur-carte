@@ -32,6 +32,73 @@
 
   var CAT_SEP = ';';
 
+  // Style proposé d'office à une catégorie selon son nom (icône de js/icons.js + couleur),
+  // dans l'esprit des cartes Mapme. Testé dans l'ordre, sur le nom sans accents ni casse.
+  // Ce n'est qu'un point de départ : chaque catégorie se change dans « Réglages ».
+  // Une catégorie sans règle reçoit le repère et une couleur de PALETTE.
+  var C = {
+    vert: '#2f9e44', vertFonce: '#0b6e4f', sarcelle: '#0c8599', bleu: '#1c7ed6',
+    rouge: '#e03131', orange: '#e8590c', violet: '#7048e8', gris: '#495057'
+  };
+  var STYLE_RULES = [
+    [/espaces? verts?/, 'trees', C.vert],
+    [/verdissement|parcs?\b/, 'tree-deciduous', C.vert],
+    [/agriculture/, 'sprout', C.vert],
+    [/alimentaire/, 'apple', C.vert],
+    [/animal/, 'paw-print', C.vert],
+    [/transition ecologique|climat/, 'leaf', C.vertFonce],
+    [/electrification/, 'zap', C.vertFonce],
+    [/matieres residuelles|recyclage/, 'recycle', C.gris],
+    [/proprete/, 'trash-2', C.gris],
+    [/acces a l.eau|baignade/, 'waves', C.sarcelle],
+    [/^eau$|\beau\b/, 'droplet', C.sarcelle],
+    [/\bvelo|bixi|mobilite active/, 'bike', C.vert],
+    [/pieton/, 'footprints', C.sarcelle],
+    [/securisation|vision zero|securite routiere/, 'shield-check', C.orange],
+    [/amenagement des rues|rues?\b/, 'traffic-cone', C.sarcelle],
+    [/stationnement/, 'circle-parking', C.gris],
+    [/marchandises/, 'truck', C.gris],
+    [/transport|voies reservees|autobus/, 'bus', C.bleu],
+    [/echelle humaine/, 'person-standing', C.sarcelle],
+    [/qualite de vie/, 'sun', C.sarcelle],
+    [/loisirs/, 'ferris-wheel', C.bleu],
+    [/familles|enfants/, 'baby', C.bleu],
+    [/jeunesse|jeunes/, 'sparkles', C.bleu],
+    [/aine/, 'hand-helping', C.bleu],
+    [/ecoles?/, 'school', C.bleu],
+    [/sports?/, 'dumbbell', C.bleu],
+    [/accesslogis|logement|habitation/, 'house', C.rouge],
+    [/communautaire|social/, 'users', C.bleu],
+    [/accessibilite/, 'accessibility', C.bleu],
+    [/services? aux citoyen/, 'info', C.bleu],
+    [/interculturel|immigration/, 'earth', C.bleu],
+    [/propriete/, 'key-round', C.rouge],
+    [/itinerance|pauvrete/, 'hand-heart', C.rouge],
+    [/culture/, 'palette', C.orange],
+    [/patrimoine/, 'landmark', C.orange],
+    [/tourisme/, 'camera', C.orange],
+    [/autochtone/, 'feather', C.orange],
+    [/budget participatif/, 'piggy-bank', C.violet],
+    [/democratie|participation citoyenne/, 'vote', C.violet],
+    [/inegalites|ads\+/, 'scale', C.violet],
+    [/femmes/, 'star', C.violet],
+    [/economique|commerce/, 'briefcase', C.violet],
+    [/metropole/, 'globe', C.violet],
+    [/infrastructures?/, 'construction', C.gris],
+    [/industrie/, 'factory', C.gris],
+    [/urbanisme/, 'building-2', C.gris],
+    [/administration|arrondissement/, 'landmark', C.gris]
+  ];
+  var DEFAULT_ICON = 'map-pin';
+
+  function defaultStyle(category) {
+    var n = String(category).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    for (var i = 0; i < STYLE_RULES.length; i++) {
+      if (STYLE_RULES[i][0].test(n)) return { icon: STYLE_RULES[i][1], color: STYLE_RULES[i][2] };
+    }
+    return null;
+  }
+
   function norm(s) {
     return String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[\s_\-.]/g, '');
   }
@@ -65,7 +132,7 @@
       source: { fileName: null, delimiter: ',', eol: '\n' },
       columns: DEFAULT_COLUMNS.slice(),
       roles: detectRoles(DEFAULT_COLUMNS),
-      settings: { accent: '#0f766e', colorByCategory: true, categoryColors: {} },
+      settings: { accent: '#0f766e', colorByCategory: true, categoryColors: {}, categoryIcons: {} },
       features: []
     };
   }
@@ -180,12 +247,23 @@
     return stats;
   }
 
+  // Donne une couleur et une icône aux catégories qui n'en ont pas encore (règles de
+  // STYLE_RULES, sinon PALETTE et le repère). Ne remplace jamais un choix existant.
   function assignColors(p) {
     var colors = p.settings.categoryColors;
+    var icons = p.settings.categoryIcons || (p.settings.categoryIcons = {});
     var used = Object.keys(colors).length;
     categoryStats(p).forEach(function (n, c) {
-      if (!colors[c]) colors[c] = PALETTE[used++ % PALETTE.length];
+      var d = defaultStyle(c);
+      if (!colors[c]) colors[c] = d ? d.color : PALETTE[used++ % PALETTE.length];
+      if (!icons[c]) icons[c] = d ? d.icon : DEFAULT_ICON;
     });
+  }
+
+  // Icône d'un lieu : celle de sa première catégorie
+  function iconOf(p, f) {
+    var cats = getCategories(p, f);
+    return (cats.length && (p.settings.categoryIcons || {})[cats[0]]) || DEFAULT_ICON;
   }
 
   function colorOf(p, f) {
@@ -253,6 +331,7 @@
     Object.keys(obj).forEach(function (k) { p[k] = obj[k]; });
     p.settings = Object.assign(emptyProject().settings, obj.settings || {});
     p.settings.categoryColors = Object.assign({}, (obj.settings || {}).categoryColors);
+    p.settings.categoryIcons = Object.assign({}, (obj.settings || {}).categoryIcons);
     p.roles = Object.assign(detectRoles(p.columns), obj.roles || {});
     p.features.forEach(function (f) { if (!f.uid) f.uid = uid(); if (!f.row) f.row = {}; });
     assignColors(p);
@@ -266,7 +345,7 @@
     getLatLng: getLatLng, setLatLng: setLatLng, getPath: getPath, setPath: setPath,
     hasPosition: hasPosition, parseWkt: parseWkt, toWkt: toWkt,
     getCategories: getCategories, displayAddress: displayAddress, setCategories: setCategories, categoryStats: categoryStats,
-    assignColors: assignColors, colorOf: colorOf, analyse: analyse, distanceKm: distanceKm,
+    assignColors: assignColors, colorOf: colorOf, iconOf: iconOf, defaultStyle: defaultStyle, DEFAULT_ICON: DEFAULT_ICON, analyse: analyse, distanceKm: distanceKm,
     newFeature: newFeature, toCsv: toCsv, uid: uid
   };
 })(typeof window !== 'undefined' ? window : this);

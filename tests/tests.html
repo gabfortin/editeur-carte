@@ -18,6 +18,7 @@
 <meta name="app-version" content="test">
 <script src="../js/csv.js"></script>
 <script src="../js/sanitize.js"></script>
+<script src="../js/icons.js"></script>
 <script src="../js/model.js"></script>
 <script>
   // export-html.js charge ses morceaux en chemins relatifs à la racine : on le fait depuis /tests/
@@ -65,6 +66,17 @@
   check('lieu normal sans problème', issueOf('059151de-dbd1-4614-9fca-2e9c2fd7f989') === undefined);
   check('catégories découpées', Model.getCategories(p, p.features[0]).length === 3);
   check('couleurs attribuées à chaque catégorie', [...Model.categoryStats(p).keys()].every(c => /^#/.test(p.settings.categoryColors[c])));
+  check('icône attribuée à chaque catégorie, et elle existe', [...Model.categoryStats(p).keys()].every(c => Icons.has(p.settings.categoryIcons[c])));
+  check('style proposé selon le nom', Model.defaultStyle('Espaces verts').icon === 'trees' && Model.defaultStyle('AccèsLogis et Logement social').icon === 'house' &&
+    Model.defaultStyle('Développement communautaire et social').icon === 'users' && Model.defaultStyle('Vélo et mobilité active').icon === 'bike');
+  check('catégorie inconnue : repère', Model.defaultStyle('Zzz') === null && Model.iconOf(p, { row: { categories: '' } }) === Model.DEFAULT_ICON);
+  check('icône d\'un lieu = celle de sa première catégorie', Model.iconOf(p, p.features[0]) === p.settings.categoryIcons[Model.getCategories(p, p.features[0])[0]]);
+  p.settings.categoryIcons['Espaces verts'] = 'dog';
+  Model.assignColors(p);
+  check('un choix d\'icône n\'est jamais remplacé', p.settings.categoryIcons['Espaces verts'] === 'dog');
+  check('icônes gardées au rechargement du projet', Model.revive(JSON.parse(JSON.stringify(p))).settings.categoryIcons['Espaces verts'] === 'dog');
+  check('le CSV ne contient pas les icônes', Model.toCsv(p) === text);
+  check('toutes les icônes de la liste existent', Icons.list.every(x => Icons.has(x.id)) && Icons.list.length >= 60);
 
   const moved = p.features[3];
   const before = JSON.stringify(p.features.filter(f => f !== moved).map(f => f.row));
@@ -117,6 +129,7 @@
   // 9 lieux dont 2 sans position → 7 affichés (6 points + 1 ligne)
   check('carte exportée : 7 lieux listés', items.length === 7, items.length);
   check('carte exportée : 7 tracés sur la carte', doc.querySelectorAll('.leaflet-interactive').length === 7, doc.querySelectorAll('.leaflet-interactive').length);
+  check('carte exportée : lieux en disques avec icône', doc.querySelectorAll('.vw-disc svg').length === 6, doc.querySelectorAll('.vw-disc svg').length);
   check('carte exportée : filtres de catégorie', doc.querySelectorAll('.chip').length === Model.categoryStats(p).size + 1);
   doc.querySelector('.item').click();
   await new Promise(r => setTimeout(r, 2500));
