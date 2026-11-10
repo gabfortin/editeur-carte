@@ -1,12 +1,14 @@
 # Éditeur de carte
 
-Outil pour monter une carte de lieux à partir d'un fichier CSV (par exemple un export Mapme), la corriger, puis la publier en une page HTML autonome à intégrer dans un autre site. Tout se passe dans le navigateur : aucun serveur, aucune donnée envoyée.
+Outil pour monter une carte de lieux à partir d'un fichier CSV (par exemple un
+export Mapme), la corriger, puis la publier en une page HTML autonome à
+intégrer dans un autre site. Pour qui gère une carte de lieux (élu·es,
+organismes) sans outil payant. Tout se passe dans le navigateur : aucun
+serveur, aucune donnée envoyée.
 
 **En ligne :** [mapedit.gabfortin.com](https://mapedit.gabfortin.com)
 
-Projet personnel de [Gabriel Fortin](https://gabfortin.com). Ce n'est pas un service de la Ville de Montréal ni d'un arrondissement.
-
-## Ce que fait l'outil
+## Contenu
 
 | Fonction | Détail |
 |---|---|
@@ -20,29 +22,7 @@ Projet personnel de [Gabriel Fortin](https://gabfortin.com). Ce n'est pas un ser
 | Enregistrer | Automatique, dans le navigateur (IndexedDB). « Mes cartes » liste les cartes enregistrées sur cet appareil. |
 | Exporter | **Page HTML** autonome (carte, données, Leaflet et code intégrés) + code d'`iframe` ; **CSV** (mêmes colonnes et même ordre que le fichier importé) ; **projet** `.json`. |
 
-## Format du CSV
-
-Une ligne par lieu. Les colonnes sont reconnues par leur nom (sans tenir compte des accents ni de la casse) :
-
-| Rôle | Noms reconnus | Remarque |
-|---|---|---|
-| Identifiant | `mapmeId`, `id`, `identifiant`, `uuid` | Généré (UUID) pour un lieu ajouté |
-| Nom | `name`, `nom`, `titre`, `title` | |
-| Description | `description`, `desc`, `texte` | HTML simple accepté |
-| Catégories | `categories`, `catégorie`, `category`, `tags`, `thème` | Séparées par `;`. Couleur selon la première. |
-| Adresse | `address`, `adresse` | Une adresse qui ne contient que des coordonnées n'est pas affichée (cas Mapme) |
-| Position | `latitude`/`lat`, `longitude`/`lng`/`lon` | Point décimal ou virgule |
-| Lien | `actionText`, `actionUrl` (ou `lien`, `url`) | Bouton dans la fenêtre du lieu |
-| Ligne ou zone (tracé) | `geometry`, `wkt`, `geom` | WKT `LINESTRING (lng lat, lng lat, …)` pour une ligne, `POLYGON ((lng lat, …, premier sommet répété))` pour une zone (anneau extérieur seulement) ; GeoJSON `LineString` / `Polygon` accepté à l'import |
-| Point de rattachement d'une ligne ou d'une zone | `parentId`, `parent`, `lieuParent` | Identifiant (colonne Identifiant) du point auquel le tracé appartient. Colonne ajoutée en fin de tableau au premier rattachement. |
-
-**Ce que l'export CSV de Mapme ne contient pas** : l'icône et la couleur des catégories, le fond de carte, et les formes dessinées dans Mapme (lignes, zones). Vérifié sur l'export « Réalisations » (361 lignes, que des points). Les icônes et couleurs se refont dans « Réglages de la carte » ; les lignes se tracent dans l'éditeur.
-
-Les autres colonnes (`pitch`, `zoom`, `bearing` de Mapme, etc.) sont gardées telles quelles et ressortent à l'export. Une carte créée de zéro utilise les colonnes de Mapme. La colonne `geometry` est ajoutée en fin de tableau au premier tracé de ligne.
-
-**Fidélité à la source** : le projet est la table du CSV. Une valeur n'est réécrite que si on la modifie (ex. latitude et longitude après un déplacement). Un CSV importé puis exporté sans modification est identique, octet pour octet (testé). Les descriptions HTML sont nettoyées **à l'affichage seulement** (voir `js/sanitize.js`) ; le texte d'origine reste dans les données tant qu'on ne le modifie pas dans l'éditeur visuel.
-
-## Publier une carte
+### Publier une carte
 
 1. Exporter → Télécharger la page HTML.
 2. Mettre le fichier en ligne (GitHub Pages, site Web).
@@ -52,9 +32,28 @@ La page exportée n'a ni mesure d'audience ni dépendance externe, sauf les tuil
 
 La page exportée contient le projet complet : on peut la rouvrir dans l'éditeur (Importer) pour la modifier.
 
-## Stack
+## Données
 
-HTML/CSS/JS vanilla, sans build. Leaflet 1.9.4 hébergé dans `vendor/` (il est aussi intégré tel quel dans les pages exportées). Pictogrammes : 72 icônes de [Lucide](https://lucide.dev) 0.460.0 (licence ISC, `vendor/lucide-0.460.0/LICENSE`) copiées dans `js/icons.js`. Polices Inter et Poppins dans `fonts/` (OFL). Système de design des cartes (`~/Developer/MAP-DESIGN-SYSTEM.md`), dialecte `gf-`, couleur sarcelle, mode sombre selon l'appareil.
+Les données sont celles que la personne importe : l'outil n'a pas de source
+à lui. Colonnes reconnues, format des tracés et fidélité à la source
+(un CSV importé puis exporté sans modification est identique, octet pour
+octet) : [DONNEES.md](DONNEES.md).
+
+## Utilisation locale
+
+```bash
+python3 -m http.server 8000
+```
+
+- Éditeur : http://localhost:8000/
+- Charger l'exemple : http://localhost:8000/tests/charger-exemple.html (enregistre `tests/exemple-mapme.csv` comme carte et ouvre l'éditeur)
+
+## Tests
+
+Dans le navigateur, avec le serveur local : <http://localhost:8000/tests/tests.html>
+(CSV, nettoyage HTML, modèle, export, carte exportée).
+
+## Architecture
 
 | Fichier | Rôle |
 |---|---|
@@ -68,14 +67,44 @@ HTML/CSS/JS vanilla, sans build. Leaflet 1.9.4 hébergé dans `vendor/` (il est 
 | `viewer/viewer.css`, `viewer/viewer.js` | Carte publiée (intégrés dans la page exportée) |
 | `tests/` | Tests et CSV d'exemple |
 
-## Développer en local
+HTML/CSS/JS vanilla, sans build. Leaflet 1.9.4 hébergé dans `vendor/` (il est aussi intégré tel quel dans les pages exportées). Pictogrammes : 72 icônes de [Lucide](https://lucide.dev) 0.460.0 (licence ISC, `vendor/lucide-0.460.0/LICENSE`) copiées dans `js/icons.js`. Polices Inter et Poppins dans `fonts/` (OFL). Système de design des cartes (`~/Developer/MAP-DESIGN-SYSTEM.md`), dialecte `gf-`, couleur sarcelle, mode sombre selon l'appareil.
 
-```bash
-python3 -m http.server 8000
-```
+## Publication
 
-- Éditeur : http://localhost:8000/
-- Tests : http://localhost:8000/tests/tests.html (CSV, nettoyage HTML, modèle, export, carte exportée)
-- Charger l'exemple : http://localhost:8000/tests/charger-exemple.html (enregistre `tests/exemple-mapme.csv` comme carte et ouvre l'éditeur)
+GitHub Pages, branche `main`, domaine dans `CNAME`. Ce site n'a pas encore le
+numéro de version x.y.z des autres sites : à chaque mise en ligne, changer le
+numéro `?v=` dans `index.html` (balises `<link>`/`<script>` et
+`<meta name="app-version">`, qui sert aussi aux fichiers intégrés dans les
+pages exportées).
 
-À chaque mise en ligne : changer le numéro `?v=` dans `index.html` (balises `<link>`/`<script>` et `<meta name="app-version">`, qui sert aussi aux fichiers intégrés dans les exports).
+## Confidentialité
+
+Aucun cookie, aucun compte, aucune donnée envoyée : les cartes sont
+enregistrées dans le navigateur (IndexedDB).
+
+| Quand | Ce qui est envoyé | À qui |
+|---|---|---|
+| Chaque visite | Page, site d'origine, appareil, pays | GoatCounter (mesure d'audience anonyme) |
+| Carte | Requêtes de tuiles de la zone affichée | OpenStreetMap |
+
+La page exportée n'a ni mesure d'audience ni dépendance externe, sauf les
+tuiles OpenStreetMap. Détails : [confidentialite.html](confidentialite.html).
+
+## Crédits
+
+- [Leaflet](https://leafletjs.com) 1.9.4 (BSD-2-Clause), hébergé dans `vendor/`
+- 72 pictogrammes de [Lucide](https://lucide.dev) 0.460.0 (ISC), copiés dans `js/icons.js` (licence dans `vendor/lucide-0.460.0/LICENSE`)
+- Polices Inter et Poppins (SIL OFL 1.1), hébergées dans `fonts/`
+- Fond de carte © les contributeurs d'[OpenStreetMap](https://www.openstreetmap.org/copyright) (ODbL)
+
+## Auteur
+
+Développé par [Gabriel Fortin](https://gabfortin.com). Projet personnel : ce
+n'est pas un service de la Ville de Montréal ni d'un arrondissement.
+
+## Documentation détaillée
+
+| Fichier | Contenu |
+|---|---|
+| [DONNEES.md](DONNEES.md) | Colonnes du CSV reconnues, tracés, fidélité à la source |
+| [NOTES.md](NOTES.md) | Décisions : tout dans le navigateur, le projet est la table du CSV… |
