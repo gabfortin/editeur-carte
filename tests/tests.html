@@ -156,7 +156,7 @@
   p.title = 'Carte test <\/script> <b>';
   p.about = 'Texte « à propos ».';
   const html = await ExportHtml.build(p);
-  check('page exportée autonome (Leaflet intégré)', html.includes('Leaflet') && !/<script[^>]+src=/.test(html));
+  check('page exportée autonome (MapLibre et composant de carte intégrés)', html.includes('maplibregl') && html.includes('OpenFreeMap') && !/<script[^>]+src=/.test(html));
   check('titre échappé', html.includes('<title>Carte test &lt;/script&gt; &lt;b&gt;</title>'));
   const back = ExportHtml.extractProject(html);
   check('projet relu depuis la page exportée', back.features.length === p.features.length && back.title === p.title);
@@ -166,14 +166,18 @@
   const frame = document.getElementById('viewer');
   frame.srcdoc = html;
   await new Promise(r => frame.onload = r);
-  await new Promise(r => setTimeout(r, 400));
   const doc = frame.contentDocument;
+  // Carte du composant commun (MapLibre) : attendre que le fond soit chargé
+  await new Promise(r => { const t0 = Date.now(); (function attendre() { const c = doc.getElementById('map')._carte; if ((c && c._loaded) || Date.now() - t0 > 15000) r(); else setTimeout(attendre, 100); })(); });
+  const carte = doc.getElementById('map')._carte;
+  const traces = []; carte.eachLayer(l => { if (l.getLatLngs) traces.push(l); });
   const items = doc.querySelectorAll('.item');
   // 10 lieux dont 2 sans position → 8 affichés (6 points + 1 ligne + 1 zone, toutes deux rattachées au 1er point, non listées à part)
   check('carte exportée : 6 lieux listés (ligne et zone rattachées comprises dans leur point)', items.length === 6, items.length);
-  check('carte exportée : 8 éléments sur la carte', doc.querySelectorAll('.leaflet-interactive').length === 8, doc.querySelectorAll('.leaflet-interactive').length);
-  const zonePath = [...doc.querySelectorAll('path.leaflet-interactive')].find(e => e.getAttribute('fill') !== 'none');
-  check('carte exportée : zone remplie en semi-transparence', zonePath && Number(zonePath.getAttribute('fill-opacity')) > 0 && Number(zonePath.getAttribute('fill-opacity')) < .5);
+  const nbElements = doc.querySelectorAll('.leaflet-marker-icon').length + traces.length;
+  check('carte exportée : 8 éléments sur la carte', nbElements === 8, nbElements);
+  const zoneCarte = traces.find(l => l.options.fill);
+  check('carte exportée : zone remplie en semi-transparence', zoneCarte && zoneCarte.options.fillOpacity > 0 && zoneCarte.options.fillOpacity < .5, zoneCarte && zoneCarte.options.fillOpacity);
   check('carte exportée : lieux en disques avec icône', doc.querySelectorAll('.vw-disc svg').length === 6, doc.querySelectorAll('.vw-disc svg').length);
   check('carte exportée : filtres de catégorie', doc.querySelectorAll('.chip').length === Model.categoryStats(p).size + 1);
   doc.querySelector('.item').click();
@@ -183,9 +187,13 @@
   check('carte exportée : aucune balise script dans la fenêtre', pop && !pop.querySelector('script'));
   frame.contentWindow.document.querySelector('.leaflet-popup-close-button')?.click();
   await new Promise(r => setTimeout(r, 300));
-  const pathEl = doc.querySelector('path.leaflet-interactive');
-  const box = pathEl.getBoundingClientRect();
-  pathEl.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 }));
+  // Clic sur la zone : les tracés sont dessinés dans le canevas de la carte, on clique au centre de la zone
+  carte.fitBounds(zoneCarte.getBounds(), { animate: false });
+  await new Promise(r => setTimeout(r, 600));
+  const pt0 = carte.latLngToContainerPoint(zoneCarte.getBounds().getCenter());
+  const canevas = doc.querySelector('.maplibregl-canvas'), box = canevas.getBoundingClientRect();
+  const Souris = frame.contentWindow.MouseEvent;   // événement de la fenêtre de l'iframe : MapLibre l'exige
+  for (const type of ['mousedown', 'mouseup', 'click']) canevas.dispatchEvent(new Souris(type, { bubbles: true, button: 0, clientX: box.x + pt0.x, clientY: box.y + pt0.y }));
   await new Promise(r => setTimeout(r, 400));
   const pop2 = doc.querySelector('.leaflet-popup .pop h2');
   check('carte exportée : le tracé rattaché (zone dessinée en premier) ouvre la fiche de son point', pop2 && pop2.textContent === Model.get(p, pt, 'name'), pop2 && pop2.textContent);

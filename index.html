@@ -7,7 +7,7 @@
   <meta name="description" content="Importer un fichier CSV de lieux, placer et modifier des points et des lignes, puis publier la carte en une page HTML à intégrer dans un autre site. Tout reste dans le navigateur.">
   <meta name="author" content="Gabriel Fortin">
   <link rel="author" href="https://gabfortin.com">
-  <meta name="app-version" content="2026-11-05-6">
+  <meta name="app-version" content="2026-11-17-1">
   <meta name="theme-color" content="#eef1ea" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0b1310" media="(prefers-color-scheme: dark)">
   <link rel="icon" type="image/svg+xml" href="img/icon.svg">
@@ -16,10 +16,11 @@
   <script>window.goatcounter = {path: function(p) { return location.host + p }}</script>
   <script data-goatcounter="https://gabfortin.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 
-  <link rel="preconnect" href="https://tile.openstreetmap.org">
+  <link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>
   <link rel="preload" href="fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="vendor/leaflet-1.9.4/leaflet.css">
-  <link rel="stylesheet" href="css/style.css?v=2026-11-05-6">
+  <link rel="stylesheet" href="vendor/carte/maplibre-gl.css">
+  <link rel="stylesheet" href="vendor/carte/carte.css?v=2026-11-17-1">
+  <link rel="stylesheet" href="css/style.css?v=2026-11-17-1">
 </head>
 <body>
   <a class="skip-link" href="#map">Passer à la carte</a>
@@ -342,7 +343,7 @@
         </details>
         <details>
           <summary>Publier la carte</summary>
-          <p>Exporter → Télécharger la page HTML. Mettez le fichier en ligne (GitHub Pages, votre site), puis intégrez-le avec le code d'<code>iframe</code> fourni. Ouverte directement depuis votre disque, la page peut afficher un fond de carte bloqué : c'est une règle d'OpenStreetMap, une fois en ligne tout s'affiche.</p>
+          <p>Exporter → Télécharger la page HTML. Mettez le fichier en ligne (GitHub Pages, votre site), puis intégrez-le avec le code d'<code>iframe</code> fourni. Elle s'affiche aussi ouverte directement depuis votre disque.</p>
         </details>
       </div>
       <h3>Conçu par</h3>
@@ -362,13 +363,14 @@
 
   <noscript><p class="noscript">Cet outil requiert JavaScript.</p></noscript>
 
-  <script src="vendor/leaflet-1.9.4/leaflet.js" defer></script>
-  <script src="js/csv.js?v=2026-11-05-6" defer></script>
-  <script src="js/sanitize.js?v=2026-11-05-6" defer></script>
-  <script src="js/icons.js?v=2026-11-05-6" defer></script>
-  <script src="js/model.js?v=2026-11-05-6" defer></script>
-  <script src="js/store.js?v=2026-11-05-6" defer></script>
-  <script src="js/export-html.js?v=2026-11-05-6" defer></script>
-  <script src="js/app.js?v=2026-11-05-6" defer></script>
+  <script src="vendor/carte/maplibre-gl.js" defer></script>
+  <script src="vendor/carte/carte.js?v=2026-11-17-1" defer></script>
+  <script src="js/csv.js?v=2026-11-17-1" defer></script>
+  <script src="js/sanitize.js?v=2026-11-17-1" defer></script>
+  <script src="js/icons.js?v=2026-11-17-1" defer></script>
+  <script src="js/model.js?v=2026-11-17-1" defer></script>
+  <script src="js/store.js?v=2026-11-17-1" defer></script>
+  <script src="js/export-html.js?v=2026-11-17-1" defer></script>
+  <script src="js/app.js?v=2026-11-17-1" defer></script>
 </body>
 </html>

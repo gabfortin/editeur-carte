@@ -20,7 +20,7 @@ serveur, aucune donnée envoyée.
 | Annuler | Bouton « Annuler » ou Ctrl+Z (60 étapes). |
 | Style | Couleur et icône par catégorie (« Réglages de la carte »), parmi 72 pictogrammes. Un lieu prend celles de sa première catégorie et s'affiche en disque de couleur avec une icône blanche, comme dans Mapme. Une couleur et une icône sont proposées d'office selon le nom de la catégorie (ex. « Espaces verts » → arbres, vert). Enregistré dans le projet et la page exportée, jamais dans le CSV. |
 | Enregistrer | Automatique, dans le navigateur (IndexedDB). « Mes cartes » liste les cartes enregistrées sur cet appareil. |
-| Exporter | **Page HTML** autonome (carte, données, Leaflet et code intégrés) + code d'`iframe` ; **CSV** (mêmes colonnes et même ordre que le fichier importé) ; **projet** `.json`. |
+| Exporter | **Page HTML** autonome (carte, données, composant de carte et code intégrés, environ 1,3 Mo) + code d'`iframe` ; **CSV** (mêmes colonnes et même ordre que le fichier importé) ; **projet** `.json`. |
 
 ### Publier une carte
 
@@ -28,7 +28,7 @@ serveur, aucune donnée envoyée.
 2. Mettre le fichier en ligne (GitHub Pages, site Web).
 3. L'intégrer avec le code d'`iframe` fourni, en remplaçant l'adresse.
 
-La page exportée n'a ni mesure d'audience ni dépendance externe, sauf les tuiles OpenStreetMap. Ouverte directement depuis le disque (`file://`), elle peut afficher des tuiles bloquées : OpenStreetMap exige un site d'origine. Une fois en ligne, tout s'affiche.
+La page exportée n'a ni mesure d'audience ni dépendance externe, sauf le fond de carte OpenFreeMap. Elle s'affiche aussi ouverte directement depuis le disque (`file://`).
 
 La page exportée contient le projet complet : on peut la rouvrir dans l'éditeur (Importer) pour la modifier.
 
@@ -67,7 +67,7 @@ Dans le navigateur, avec le serveur local : <http://localhost:8000/tests/tests.h
 | `viewer/viewer.css`, `viewer/viewer.js` | Carte publiée (intégrés dans la page exportée) |
 | `tests/` | Tests et CSV d'exemple |
 
-HTML/CSS/JS vanilla, sans build. Leaflet 1.9.4 hébergé dans `vendor/` (il est aussi intégré tel quel dans les pages exportées). Pictogrammes : 72 icônes de [Lucide](https://lucide.dev) 0.460.0 (licence ISC, `vendor/lucide-0.460.0/LICENSE`) copiées dans `js/icons.js`. Polices Inter et Poppins dans `fonts/` (OFL). Système de design des cartes (`~/Developer/MAP-DESIGN-SYSTEM.md`), dialecte `gf-`, couleur sarcelle, mode sombre selon l'appareil.
+HTML/CSS/JS vanilla, sans build. Composant de carte commun dans `vendor/carte/` (modèle `~/Developer/outils/communs/carte/` : API de Leaflet dessinée par MapLibre GL, fond OpenFreeMap), aussi intégré tel quel dans les pages exportées. Pictogrammes : 72 icônes de [Lucide](https://lucide.dev) 0.460.0 (licence ISC, `vendor/lucide-0.460.0/LICENSE`) copiées dans `js/icons.js`. Polices Inter et Poppins dans `fonts/` (OFL). Système de design des cartes (`~/Developer/MAP-DESIGN-SYSTEM.md`), dialecte `gf-`, couleur sarcelle, mode sombre selon l'appareil.
 
 ## Publication
 
@@ -85,17 +85,17 @@ enregistrées dans le navigateur (IndexedDB).
 | Quand | Ce qui est envoyé | À qui |
 |---|---|---|
 | Chaque visite | Page, site d'origine, appareil, pays | GoatCounter (mesure d'audience anonyme) |
-| Carte | Requêtes de tuiles de la zone affichée | OpenStreetMap |
+| Carte | Fond de carte de la zone affichée | OpenFreeMap |
 
-La page exportée n'a ni mesure d'audience ni dépendance externe, sauf les
-tuiles OpenStreetMap. Détails : [confidentialite.html](confidentialite.html).
+La page exportée n'a ni mesure d'audience ni dépendance externe, sauf le
+fond de carte OpenFreeMap. Détails : [confidentialite.html](confidentialite.html).
 
 ## Crédits
 
-- [Leaflet](https://leafletjs.com) 1.9.4 (BSD-2-Clause), hébergé dans `vendor/`
+- [MapLibre GL JS](https://maplibre.org) (BSD-3-Clause), hébergé dans `vendor/carte/` ; fond [OpenFreeMap](https://openfreemap.org), © [OpenMapTiles](https://www.openmaptiles.org)
 - 72 pictogrammes de [Lucide](https://lucide.dev) 0.460.0 (ISC), copiés dans `js/icons.js` (licence dans `vendor/lucide-0.460.0/LICENSE`)
 - Polices Inter et Poppins (SIL OFL 1.1), hébergées dans `fonts/`
-- Fond de carte © les contributeurs d'[OpenStreetMap](https://www.openstreetmap.org/copyright) (ODbL)
+- Données du fond de carte © les contributeurs d'[OpenStreetMap](https://www.openstreetmap.org/copyright) (ODbL)
 
 ## Auteur
 

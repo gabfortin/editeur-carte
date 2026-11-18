@@ -62,10 +62,10 @@ Les exports Mapme contiennent du HTML copié de Word ou de pages Web (`<font sty
 
 ## Carte exportée
 
-- Un seul fichier : Leaflet, `sanitize.js`, `model.js`, `viewer.js` et les styles sont lus depuis le site au moment de l'export (`fetch`) et intégrés. Pas de CDN, pas de GoatCounter (c'est le site d'accueil qui décide de sa mesure d'audience).
+- Un seul fichier : MapLibre et le composant de carte (`vendor/carte/`), `sanitize.js`, `model.js`, `viewer.js` et les styles sont lus depuis le site au moment de l'export (`fetch`) et intégrés. Pas de CDN, pas de GoatCounter (c'est le site d'accueil qui décide de sa mesure d'audience).
 - Le projet est intégré en JSON dans `<script type="application/json" id="editeur-carte-projet">`, avec `<` échappé : une description qui contient `</script>` ne peut pas casser la page (testé).
 - `#lieu=<uid>` dans l'adresse ouvre directement un lieu (lien à partager).
-- Rendu en SVG (`circleMarker`), assez rapide pour quelques milliers de lieux. Au-delà, prévoir des grappes (Leaflet.markercluster).
+- Lieux en éléments HTML (`divIcon`), tracés dessinés par MapLibre (WebGL) : assez rapide pour quelques milliers de lieux. Au-delà, prévoir des grappes (regroupement de MapLibre).
 
 ## Limites connues
 
@@ -80,3 +80,18 @@ Les exports Mapme contiennent du HTML copié de Word ou de pages Web (`<font sty
 - `tests/tests.html` : 69 vérifications automatiques (CSV, modèle, nettoyage, export, carte exportée dans un iframe).
 - `tests/charger-exemple.html` : enregistre le CSV d'exemple comme carte et ouvre l'éditeur.
 - Le scénario de bout en bout (glisser un point, annuler, ajouter un point et une ligne, supprimer, importer, mobile 375 px, mode sombre) a été vérifié avec Chromium sans interface, par le protocole DevTools ; le script n'est pas dans le dépôt.
+
+## Fond de carte MapLibre (17 novembre 2026)
+
+Leaflet et les tuiles tile.openstreetmap.org (« 403 Access blocked » par
+moments, et tuiles refusées pour une page exportée ouverte en `file://`) sont
+remplacés par le composant de carte commun `vendor/carte/` (modèle
+`~/Developer/outils/communs/carte/`) : même API que Leaflet, dessinée par
+MapLibre GL sur le fond OpenFreeMap. Conséquences :
+
+- la page exportée passe d'environ 150 ko à 1,3 Mo (MapLibre intégré), mais
+  s'affiche maintenant aussi depuis le disque ;
+- les tracés n'ont plus d'élément SVG : `tests/tests.html` passe par
+  `document.getElementById('map')._carte` (compte des tracés, clic sur le
+  canevas avec un `MouseEvent` de la fenêtre de l'iframe).
+

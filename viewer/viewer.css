@@ -24,7 +24,6 @@
   --hairline: rgba(11, 17, 32, 0.08);
   --overlay: rgba(11, 17, 32, 0.45); --scrim: rgba(11, 17, 32, 0.35);
   --map-bg: #eef1ea;
-  --tile-filter: saturate(0.3) brightness(1.05) contrast(0.9);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -40,7 +39,6 @@
     --hairline: rgba(255, 255, 255, 0.08);
     --overlay: rgba(0, 0, 0, 0.5); --scrim: rgba(0, 0, 0, 0.45);
     --map-bg: #0b1310;
-    --tile-filter: invert(1) hue-rotate(180deg) saturate(0.35) brightness(0.88) contrast(0.92);
   }
 }
 *, *::before, *::after { box-sizing: border-box; }
@@ -62,7 +60,6 @@ button, input { font: inherit; color: inherit; }
 #map { position: absolute; inset: 0; background: var(--map-bg); }
 #map:focus-visible { outline-offset: -3px; }
 .leaflet-container { font-family: inherit; background: var(--map-bg); }
-.leaflet-tile-pane { filter: var(--tile-filter); }
 
 .glass {
   background: var(--glass-strong); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);

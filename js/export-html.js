@@ -1,6 +1,6 @@
 /* Export de la carte en une page HTML autonome.
-   Tout est intégré dans le fichier (Leaflet, styles, code, données) : on peut le téléverser
-   n'importe où ou l'afficher dans un <iframe>. Seules les tuiles OpenStreetMap viennent du réseau.
+   Tout est intégré dans le fichier (composant de carte et MapLibre, styles, code, données) : on peut
+   le téléverser n'importe où ou l'afficher dans un <iframe>. Seul le fond OpenFreeMap vient du réseau.
    Le projet complet est intégré tel quel (#editeur-carte-projet) : la page exportée peut être
    rouverte dans l'éditeur pour la modifier. */
 (function (root) {
@@ -8,8 +8,10 @@
   var S = root.Sanitize;
 
   var PARTS = {
-    leafletCss: 'vendor/leaflet-1.9.4/leaflet.css',
-    leafletJs: 'vendor/leaflet-1.9.4/leaflet.js',
+    maplibreCss: 'vendor/carte/maplibre-gl.css',
+    carteCss: 'vendor/carte/carte.css',
+    maplibreJs: 'vendor/carte/maplibre-gl.js',
+    carteJs: 'vendor/carte/carte.js',
     viewerCss: 'viewer/viewer.css',
     viewerJs: 'viewer/viewer.js',
     sanitizeJs: 'js/sanitize.js',
@@ -63,7 +65,7 @@
         '<meta name="generator" content="Éditeur de carte (gabfortin.com)">\n' +
         '<meta name="theme-color" content="#eef1ea" media="(prefers-color-scheme: light)">\n' +
         '<meta name="theme-color" content="#0b1310" media="(prefers-color-scheme: dark)">\n' +
-        '<style>\n' + inlineCss(p.leafletCss) + '\n</style>\n' +
+        '<style>\n' + inlineCss(p.maplibreCss) + '\n' + inlineCss(p.carteCss) + '\n</style>\n' +
         '<style>\n' + inlineCss(p.viewerCss) + '\n:root { --brand: ' + accent + '; }\n</style>\n' +
         '</head>\n<body>\n' +
         '<a class="skip-link" href="#map">Passer à la carte</a>\n' +
@@ -80,7 +82,7 @@
         '    <h2 id="gfInfoTitle">' + title + '</h2>\n' +
         (about ? '    <p>' + S.escape(about) + '</p>\n' : '') +
         '    <p class="small">' + count + (count > 1 ? ' lieux' : ' lieu') + ' · mise à jour le ' + S.escape(updated) +
-        '. Fond de carte © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>.</p>\n' +
+        '. Fond de carte <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>, données © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>.</p>\n' +
         '  </div>\n</div>\n' +
         '<button class="gf-sidebar-toggle glass" id="gfSidebarToggle" type="button" aria-label="Liste des lieux" aria-expanded="false" aria-controls="gfSidebar">' +
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M4 6h16M7 12h10M10 18h4"/></svg></button>\n' +
@@ -97,7 +99,8 @@
         '<div class="gf-sidebar-scrim" id="gfSidebarScrim"></div>\n' +
         '<noscript><p style="position:fixed;inset:0;display:grid;place-items:center;margin:0">Cette carte requiert JavaScript.</p></noscript>\n' +
         '<script type="application/json" id="editeur-carte-projet">' + inlineJson(project) + '</script>\n' +
-        '<script>\n' + inlineJs(p.leafletJs) + '\n</script>\n' +
+        '<script>\n' + inlineJs(p.maplibreJs) + '\n</script>\n' +
+        '<script>\n' + inlineJs(p.carteJs) + '\n</script>\n' +
         '<script>\n' + inlineJs(p.sanitizeJs) + '\n</script>\n' +
         '<script>\n' + inlineJs(p.iconsJs) + '\n</script>\n' +
         '<script>\n' + inlineJs(p.modelJs) + '\n</script>\n' +
