@@ -1,0 +1,10 @@
+{
+  "fichier": "version.txt",
+  "donnees": [
+    "sources/"
+  ],
+  "pages": [
+    "index.html",
+    "confidentialite.html"
+  ]
+}

@@ -71,11 +71,11 @@ HTML/CSS/JS vanilla, sans build. Composant de carte commun dans `vendor/carte/` 
 
 ## Publication
 
-GitHub Pages, branche `main`, domaine dans `CNAME`. Ce site n'a pas encore le
-numéro de version x.y.z des autres sites : à chaque mise en ligne, changer le
-numéro `?v=` dans `index.html` (balises `<link>`/`<script>` et
+GitHub Pages, branche `main`, domaine dans `CNAME`. Numéro de version x.y.z
+(`version.txt`, `.version.json`) écrit par le hook `pre-commit` à chaque commit,
+comme les autres sites : il met à jour les `?v=` de `index.html` et
 `<meta name="app-version">`, qui sert aussi aux fichiers intégrés dans les
-pages exportées).
+pages exportées. Plus rien à changer à la main.
 
 ## Confidentialité
 
