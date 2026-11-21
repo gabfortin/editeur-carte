@@ -173,20 +173,16 @@ body.placing #map, body.placing .leaflet-interactive { cursor: crosshair !import
 
 /* ── Bouton « i » + modale (patron canonique) ── */
 .gf-info-btn {
-  position: relative; display: flex; align-items: center; justify-content: center;
-  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; border: none;
-  background: linear-gradient(140deg, var(--brand-light), var(--brand-dark)); color: #fff;
-  box-shadow: 0 4px 14px -4px var(--brand-glow), inset 0 1px 0 rgba(255, 255, 255, 0.45);
-  transition: transform .2s var(--ease), box-shadow .2s var(--ease);
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  padding: 0;
+  border: 1.5px solid currentColor; background: transparent;
+  color: var(--gf-info-trait, var(--brand-ink, var(--brand-dark))); cursor: pointer;
+  transition: background-color .2s ease;
 }
 .gf-info-btn svg { width: 16px; height: 16px; position: relative; z-index: 1; }
-.gf-info-btn::before {
-  content: ''; position: absolute; inset: -5px; border-radius: 50%; border: 2px solid var(--brand); opacity: .4;
-  animation: gf-info-pulse 2.6s ease-out infinite; pointer-events: none;
-}
-.gf-info-btn:hover { transform: translateY(-1px) scale(1.1); }
-.gf-info-btn:active { transform: scale(0.94); }
-@keyframes gf-info-pulse { 0% { transform: scale(0.6); opacity: 0.45; } 80%, 100% { transform: scale(1.7); opacity: 0; } }
+.gf-info-btn:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
 .gf-info-overlay {
   position: fixed; inset: 0; z-index: 2000; background: var(--overlay);
   backdrop-filter: blur(8px) saturate(140%); -webkit-backdrop-filter: blur(8px) saturate(140%);

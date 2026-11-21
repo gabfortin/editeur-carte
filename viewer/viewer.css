@@ -78,14 +78,16 @@ button, input { font: inherit; color: inherit; }
 }
 .gf-brand p { margin: 1px 0 0; font-size: .72rem; color: var(--ink-500); font-weight: 500; }
 .gf-info-btn {
-  position: relative; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  width: 32px; height: 32px; border-radius: 50%; border: none; cursor: pointer; color: #fff;
-  background: linear-gradient(140deg, var(--brand-light), var(--brand-dark));
-  box-shadow: 0 4px 14px -4px var(--brand-glow), inset 0 1px 0 rgba(255, 255, 255, .45);
-  transition: transform .2s var(--ease);
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  padding: 0;
+  border: 1.5px solid currentColor; background: transparent;
+  color: var(--gf-info-trait, var(--brand-ink, var(--brand-dark))); cursor: pointer;
+  transition: background-color .2s ease;
 }
 .gf-info-btn svg { width: 16px; height: 16px; }
-.gf-info-btn:hover { transform: translateY(-1px) scale(1.08); }
+.gf-info-btn:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
 
 .gf-info-overlay {
   position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 20px;
